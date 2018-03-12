@@ -50,6 +50,9 @@ fn combine(input: &[u8]) -> u32 {
 }
 
 fn split_block(input: &[u8]) -> [u32; 4] {
+    if input.len() != 16 {
+        panic!("the block size of SM4 must be 16.")
+    }
     let mut out: [u32; 4] = [0; 4];
     for i in 0..4 {
         let start = 4 * i;
@@ -79,13 +82,13 @@ fn tau_trans(input: u32) -> u32 {
     combine(&out)
 }
 
-fn rl(x: u32, i: u32) -> u32 {
+fn l_rotate(x: u32, i: u32) -> u32 {
     (x << (i % 32)) | (x >> (32 - (i % 32)))
 }
 
 fn l_trans(input: u32) -> u32 {
     let b = input;
-    b ^ rl(b, 2) ^ rl(b, 10) ^ rl(b, 18) ^ rl(b, 24)
+    b ^ l_rotate(b, 2) ^ l_rotate(b, 10) ^ l_rotate(b, 18) ^ l_rotate(b, 24)
 }
 
 fn t_trans(input: u32) -> u32 {
@@ -94,7 +97,7 @@ fn t_trans(input: u32) -> u32 {
 
 fn l_prime_trans(input: u32) -> u32 {
     let b = input;
-    b ^ rl(b, 13) ^ rl(b, 23)
+    b ^ l_rotate(b, 13) ^ l_rotate(b, 23)
 }
 
 fn t_prime_trans(input: u32) -> u32 {
@@ -123,9 +126,6 @@ static CK: [u32; 32] = [
 
 impl Sm4Cipher {
     pub fn new(key: &[u8]) -> Sm4Cipher {
-        if key.len() != 16 {
-            panic!("the key size of SM4 must be 16.")
-        }
         let mut k: [u32; 4] = split_block(&key);
         let mut cipher = Sm4Cipher {
             rk: Vec::new()
@@ -182,8 +182,10 @@ mod tests {
 
     #[test]
     fn setup_cipher() {
-        let key: [u8; 16] = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98,
-            0x76, 0x54, 0x32, 0x10];
+        let key: [u8; 16] = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+            0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10
+        ];
         let cipher = Sm4Cipher::new(&key);
         let rk = &cipher.rk;
         assert_eq!(rk[0], 0xf12186f9);
@@ -192,15 +194,21 @@ mod tests {
 
     #[test]
     fn enc_and_dec() {
-        let key: [u8; 16] = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98,
-            0x76, 0x54, 0x32, 0x10];
+        let key: [u8; 16] = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+            0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10
+        ];
         let cipher = Sm4Cipher::new(&key);
 
-        let data: [u8; 16] = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-            0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10];
+        let data: [u8; 16] = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+            0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10
+        ];
         let ct = cipher.encrypt(&data);
-        let standard_ct: [u8; 16] = [0x68, 0x1e, 0xdf, 0x34, 0xd2, 0x06, 0x96, 0x5e, 0x86, 0xb3,
-            0xe9, 0x4f, 0x53, 0x6e, 0x42, 0x46];
+        let standard_ct: [u8; 16] = [
+            0x68, 0x1e, 0xdf, 0x34, 0xd2, 0x06, 0x96, 0x5e,
+            0x86, 0xb3, 0xe9, 0x4f, 0x53, 0x6e, 0x42, 0x46
+        ];
 
         // Check the example cipher text
         for i in 0..16 {

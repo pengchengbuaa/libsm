@@ -1,5 +1,5 @@
 # Libsm
 
-This is a Rust library of China's Standards of Encryption Algorithm.
+This is a Rust library of China's Standards of Encryption Algorithms.
 
-It has not finished yet.
+It is still under development.

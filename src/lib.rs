@@ -1,6 +1,5 @@
 pub mod sm4;
 
-
 #[cfg(test)]
 mod tests {
     #[test]
