@@ -1,84 +1,84 @@
 use super::cipher::Sm4Cipher;
 
-pub enum CipherMode{
+pub enum CipherMode {
     Cfb,
     Ofb,
-    Ctr
+    Ctr,
 }
 
-pub struct SM4CipherMode{
+pub struct SM4CipherMode {
     cipher: Sm4Cipher,
-    mode: CipherMode
+    mode: CipherMode,
 }
 
-fn block_xor(a:&[u8], b:&[u8]) -> [u8;16]{
-    let mut out:[u8;16] = [0;16];
-    for i in 0..16{
+fn block_xor(a: &[u8], b: &[u8]) -> [u8; 16] {
+    let mut out: [u8; 16] = [0; 16];
+    for i in 0..16 {
         out[i] = a[i] ^ b[i];
     }
     out
 }
 
-fn block_add_one(a:&mut [u8]){
+fn block_add_one(a: &mut [u8]) {
     let mut t;
     let mut carry = 1;
 
-    for i in 0..16{
-        t = a[15-i] as i32 + carry;
-        if t == 256{
+    for i in 0..16 {
+        t = a[15 - i] as i32 + carry;
+        if t == 256 {
             t = 0;
             carry = 1;
-        } else{
+        } else {
             carry = 0
         }
-        a[15-i] = t as u8;
+        a[15 - i] = t as u8;
     }
 }
 
-impl SM4CipherMode{
-    pub fn new(key: &[u8], mode: CipherMode) -> SM4CipherMode{
+impl SM4CipherMode {
+    pub fn new(key: &[u8], mode: CipherMode) -> SM4CipherMode {
         let cipher = Sm4Cipher::new(key);
-        SM4CipherMode{
+        SM4CipherMode {
             cipher,
-            mode
+            mode,
         }
     }
 
-    pub fn encrypt(&self, data:&[u8], iv:&[u8]) -> Vec<u8>{
-        if iv.len() != 16{
+    pub fn encrypt(&self, data: &[u8], iv: &[u8]) -> Vec<u8> {
+        if iv.len() != 16 {
             panic!("the iv of sm4 must be 16-byte long");
         }
-        match self.mode{
+        match self.mode {
             CipherMode::Cfb => self.cfb_encrypt(data, iv),
             CipherMode::Ofb => self.ofb_encrypt(data, iv),
             CipherMode::Ctr => self.ctr_encrypt(data, iv)
         }
     }
 
-    pub fn decrypt(&self, data: &[u8], iv:&[u8]) -> Vec<u8>{
-        if iv.len() != 16{
+    pub fn decrypt(&self, data: &[u8], iv: &[u8]) -> Vec<u8> {
+        if iv.len() != 16 {
             panic!("the iv of sm4 must be 16-byte long");
         }
-        match self.mode{
+        match self.mode {
             CipherMode::Cfb => self.cfb_decrypt(data, iv),
             CipherMode::Ofb => self.ofb_encrypt(data, iv),
             CipherMode::Ctr => self.ctr_encrypt(data, iv)
         }
     }
 
-    fn cfb_encrypt(&self, data:&[u8], iv:&[u8]) -> Vec<u8>{
+    fn cfb_encrypt(&self, data: &[u8], iv: &[u8]) -> Vec<u8> {
         let block_num = data.len() / 16;
         let tail_len = data.len() - block_num * 16;
 
-        let mut out:Vec<u8> = Vec::new();
-        let mut vec_buf:Vec<u8> = vec![0;16];
+        let mut out: Vec<u8> = Vec::new();
+        let mut vec_buf: Vec<u8> = vec![0; 16];
         vec_buf.clone_from_slice(iv);
 
         // Normal
-        for i in 0..block_num{
+        for i in 0..block_num {
             let enc = self.cipher.encrypt(&vec_buf[..]);
-            let ct = block_xor(&enc, &data[i*16..i*16+16]);
-            for i in ct.iter(){
+            let ct = block_xor(&enc, &data[i * 16..i * 16 + 16]);
+            for i in ct.iter() {
                 out.push(*i);
             }
             vec_buf.clone_from_slice(&ct);
@@ -86,27 +86,27 @@ impl SM4CipherMode{
 
         // Last block
         let enc = self.cipher.encrypt(&vec_buf[..]);
-        for i in 0..tail_len{
-            let b = data[block_num*16+i] ^ enc[i];
+        for i in 0..tail_len {
+            let b = data[block_num * 16 + i] ^ enc[i];
             out.push(b);
         }
         out
     }
 
-    fn cfb_decrypt(&self, data:&[u8], iv:&[u8]) -> Vec<u8>{
+    fn cfb_decrypt(&self, data: &[u8], iv: &[u8]) -> Vec<u8> {
         let block_num = data.len() / 16;
         let tail_len = data.len() - block_num * 16;
 
-        let mut out:Vec<u8> = Vec::new();
-        let mut vec_buf:Vec<u8> = vec![0;16];
+        let mut out: Vec<u8> = Vec::new();
+        let mut vec_buf: Vec<u8> = vec![0; 16];
         vec_buf.clone_from_slice(iv);
 
         // Normal
-        for i in 0..block_num{
+        for i in 0..block_num {
             let enc = self.cipher.encrypt(&vec_buf[..]);
-            let ct = &data[i*16..i*16+16];
+            let ct = &data[i * 16..i * 16 + 16];
             let pt = block_xor(&enc, ct);
-            for i in pt.iter(){
+            for i in pt.iter() {
                 out.push(*i);
             }
             vec_buf.clone_from_slice(ct);
@@ -114,26 +114,26 @@ impl SM4CipherMode{
 
         // Last block
         let enc = self.cipher.encrypt(&vec_buf[..]);
-        for i in 0..tail_len{
-            let b = data[block_num*16+i] ^ enc[i];
+        for i in 0..tail_len {
+            let b = data[block_num * 16 + i] ^ enc[i];
             out.push(b);
         }
         out
     }
 
-    fn ofb_encrypt(&self, data:&[u8], iv:&[u8]) -> Vec<u8>{
+    fn ofb_encrypt(&self, data: &[u8], iv: &[u8]) -> Vec<u8> {
         let block_num = data.len() / 16;
         let tail_len = data.len() - block_num * 16;
 
-        let mut out:Vec<u8> = Vec::new();
-        let mut vec_buf:Vec<u8> = vec![0;16];
+        let mut out: Vec<u8> = Vec::new();
+        let mut vec_buf: Vec<u8> = vec![0; 16];
         vec_buf.clone_from_slice(iv);
 
         // Normal
-        for i in 0..block_num{
+        for i in 0..block_num {
             let enc = self.cipher.encrypt(&vec_buf[..]);
-            let ct = block_xor(&enc, &data[i*16..i*16+16]);
-            for i in ct.iter(){
+            let ct = block_xor(&enc, &data[i * 16..i * 16 + 16]);
+            for i in ct.iter() {
                 out.push(*i);
             }
             vec_buf.clone_from_slice(&enc);
@@ -141,27 +141,27 @@ impl SM4CipherMode{
 
         // Last block
         let enc = self.cipher.encrypt(&vec_buf[..]);
-        for i in 0..tail_len{
-            let b = data[block_num*16+i] ^ enc[i];
+        for i in 0..tail_len {
+            let b = data[block_num * 16 + i] ^ enc[i];
             out.push(b);
         }
         out
     }
 
-    fn ctr_encrypt(&self, data:&[u8], iv:&[u8]) -> Vec<u8>{
-        let mut vec_buf:Vec<u8> = vec![0;16];
+    fn ctr_encrypt(&self, data: &[u8], iv: &[u8]) -> Vec<u8> {
+        let mut vec_buf: Vec<u8> = vec![0; 16];
         vec_buf.resize(16, 0);
         vec_buf.clone_from_slice(iv);
-        let mut out:Vec<u8> = Vec::new();
+        let mut out: Vec<u8> = Vec::new();
 
         let block_num = data.len() / 16;
         let tail_len = data.len() - block_num * 16;
 
         // Normal
-        for i in 0..block_num{
+        for i in 0..block_num {
             let enc = self.cipher.encrypt(&vec_buf[..]);
-            let ct = block_xor(&enc, &data[i*16..i*16+16]);
-            for i in ct.iter(){
+            let ct = block_xor(&enc, &data[i * 16..i * 16 + 16]);
+            for i in ct.iter() {
                 out.push(*i);
             }
             block_add_one(&mut vec_buf[..]);
@@ -169,8 +169,8 @@ impl SM4CipherMode{
 
         // Last block
         let enc = self.cipher.encrypt(&vec_buf[..]);
-        for i in 0..tail_len{
-            let b = data[block_num*16+i] ^ enc[i];
+        for i in 0..tail_len {
+            let b = data[block_num * 16 + i] ^ enc[i];
             out.push(b);
         }
         out
@@ -190,32 +190,32 @@ mod tests {
     use super::rand::os::OsRng;
     use super::rand::Rng;
 
-    fn rand_block() -> [u8;16]{
+    fn rand_block() -> [u8; 16] {
         let mut rng = OsRng::new().unwrap();
-        let mut block:[u8;16] = [0;16];
+        let mut block: [u8; 16] = [0; 16];
         rng.fill_bytes(&mut block[..]);
         block
     }
 
-    fn rand_data(len:usize) -> Vec<u8>{
+    fn rand_data(len: usize) -> Vec<u8> {
         let mut rng = OsRng::new().unwrap();
-        let mut dat:Vec<u8> = Vec::new();
+        let mut dat: Vec<u8> = Vec::new();
         dat.resize(len, 0);
         rng.fill_bytes(&mut dat[..]);
         dat
     }
 
     #[test]
-    fn test_driver(){
+    fn test_driver() {
         test_ciphermode(CipherMode::Ctr);
         test_ciphermode(CipherMode::Cfb);
         test_ciphermode(CipherMode::Ofb);
     }
 
 
-    fn test_ciphermode(mode:CipherMode){
+    fn test_ciphermode(mode: CipherMode) {
         let key = rand_block();
-        let iv= rand_block();
+        let iv = rand_block();
 
         let cmode = SM4CipherMode::new(&key, mode);
 
