@@ -178,17 +178,16 @@ impl SM4CipherMode {
 }
 
 // TODO: AEAD in SM4
-
 // pub struct SM4Gcm;
-extern crate rand;
+
 // Tests below
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use super::rand::os::OsRng;
-    use super::rand::Rng;
+    use rand::os::OsRng;
+    use rand::Rng;
 
     fn rand_block() -> [u8; 16] {
         let mut rng = OsRng::new().unwrap();
