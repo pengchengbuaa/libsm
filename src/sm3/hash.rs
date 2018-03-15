@@ -45,14 +45,14 @@ pub struct Sm3Hash {
 }
 
 impl Sm3Hash {
-    pub fn new(data: &str) -> Sm3Hash {
+    pub fn new(data: &[u8]) -> Sm3Hash {
         let mut hash = Sm3Hash {
             digest: [0x7380166f, 0x4914b2b9, 0x172442d7, 0xda8a0600, 0xa96f30bc, 0x163138aa, 0xe38dee4d, 0xb0fb0e4e],
             length: (data.len() << 3) as u64,
             unhandle_msg: Vec::new(),
         };
-        for i in data.bytes() {
-            hash.unhandle_msg.push(i);
+        for i in data.iter() {
+            hash.unhandle_msg.push(*i);
         }
         hash
     }
@@ -182,7 +182,8 @@ mod tests {
 
     #[test]
     fn lets_hash() {
-        let s = "abc";
+        let string = String::from("abc");
+        let s=string.as_bytes();
 //        let s = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd";
         let mut sm3 = Sm3Hash::new(s);
 
