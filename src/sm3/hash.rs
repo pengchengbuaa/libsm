@@ -34,7 +34,7 @@ fn p1(x: u32) -> u32 {
 }
 
 fn get_u32_be(b: &[u8; 64], i: usize) -> u32 {
-    let n: u32 = ((b[i] as u32) << 24 | (b[i + 1] as u32) << 16 | (b[i + 2] as u32) << 8 | (b[i + 3] as u32) << 0);
+    let n: u32 = (b[i] as u32) << 24 | (b[i + 1] as u32) << 16 | (b[i + 2] as u32) << 8 | (b[i + 3] as u32) << 0;
     n
 }
 
@@ -45,7 +45,7 @@ pub struct Sm3Hash {
 }
 
 impl Sm3Hash {
-    pub fn new(data: &String) -> Sm3Hash {
+    pub fn new(data: &str) -> Sm3Hash {
         let mut hash = Sm3Hash {
             digest: [0x7380166f, 0x4914b2b9, 0x172442d7, 0xda8a0600, 0xa96f30bc, 0x163138aa, 0xe38dee4d, 0xb0fb0e4e],
             length: (data.len() << 3) as u64,
@@ -60,7 +60,7 @@ impl Sm3Hash {
     pub fn get_hash(&mut self) -> [u8; 32] {
         let mut output: [u8; 32] = [0; 32];
         self.pad();
-        let mut len = self.unhandle_msg.len();
+        let len = self.unhandle_msg.len();
         let mut count: usize = 0;
         let mut buffer: [u8; 64] = [0; 64];
 
@@ -173,8 +173,6 @@ impl Sm3Hash {
         self.digest[5] = f ^ self.digest[5];
         self.digest[6] = g ^ self.digest[6];
         self.digest[7] = h ^ self.digest[7];
-
-
     }
 }
 
@@ -184,9 +182,9 @@ mod tests {
 
     #[test]
     fn lets_hash() {
-        let s = String::from("abc");
-//        let s = String::from("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
-        let mut sm3 = Sm3Hash::new(&s);
+        let s = "abc";
+//        let s = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd";
+        let mut sm3 = Sm3Hash::new(s);
 
         let hash = sm3.get_hash();
 
