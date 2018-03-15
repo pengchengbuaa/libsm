@@ -25,16 +25,12 @@ fn gg1(x: u32, y: u32, z: u32) -> u32 {
     (x & y) | (!x & z)
 }
 
-fn left_rotate(x: u32, i: u32) -> u32 {
-    (x << (i % 32) | x >> (32 - i % 32))
-}
-
 fn p0(x: u32) -> u32 {
-    x ^ left_rotate(x, 9) ^ left_rotate(x, 17)
+    x ^ x.rotate_left(9) ^ x.rotate_left(17)
 }
 
 fn p1(x: u32) -> u32 {
-    x ^ left_rotate(x, 15) ^ left_rotate(x, 23)
+    x ^ x.rotate_left(15) ^ x.rotate_left(23)
 }
 
 fn get_u32_be(b: &[u8; 64], i: usize) -> u32 {
@@ -61,8 +57,8 @@ impl Sm3Hash {
         hash
     }
 
-    pub fn get_hash(&mut self) -> [u8; 64] {
-        let final_msg: [u8; 64] = [0; 64];
+    pub fn get_hash(&mut self) -> [u8; 32] {
+        let mut output: [u8; 32] = [0; 32];
         self.pad();
         let mut len = self.unhandle_msg.len();
         let mut count: usize = 0;
@@ -76,8 +72,13 @@ impl Sm3Hash {
             self.update(&buffer);
             count += 1;
         }
-
-        final_msg
+        for i in 0..8 {
+            output[i * 4] = (self.digest[i] >> 24) as u8;
+            output[i * 4 + 1] = (self.digest[i] >> 16) as u8;
+            output[i * 4 + 2] = (self.digest[i] >> 8) as u8;
+            output[i * 4 + 3] = (self.digest[i] >> 0) as u8;
+        }
+        output
     }
 
     fn pad(&mut self) {
@@ -111,7 +112,7 @@ impl Sm3Hash {
         }
 
         for i in 16..68 {
-            w[i] = p1(w[i - 16] ^ w[i - 9] ^ left_rotate(w[i - 3], 15)) ^ left_rotate(w[i - 13], 7) ^ w[i - 6];
+            w[i] = p1(w[i - 16] ^ w[i - 9] ^ w[i - 3].rotate_left(15)) ^ w[i - 13].rotate_left(7) ^ w[i - 6];
         }
 
         for i in 0..64 {
@@ -133,37 +134,35 @@ impl Sm3Hash {
         let mut tt2: u32;
 
         for i in 0..16 {
-            if i==0 {
-                ss1 = left_rotate(left_rotate(a, 12) + e + 0x79cc4519, 7);
-            }else {
-                ss1 = left_rotate(left_rotate(a, 12) + e + left_rotate(0x79cc4519, i as u32), 7);
-            }
-            ss2 = ss1 ^ left_rotate(a, 12);
-            tt1=ff0(a,b,c)+d+ss2+w1[i];
-            tt2=gg0(e,f,g)+h+ss1+w[i];
-            d=c;
-            c=left_rotate(b,9);
-            b=a;
-            a=tt1;
-            h=g;
-            g=left_rotate(f,19);
-            f=e;
-            e=p0(tt2);
+            ss1 = a.rotate_left(12).wrapping_add(e).wrapping_add(0x79cc4519u32.rotate_left(i as u32)).rotate_left(7);
+            ss2 = ss1 ^ a.rotate_left(12);
+            tt1 = ff0(a, b, c).wrapping_add(d).wrapping_add(ss2).wrapping_add(w1[i]);
+            tt2 = gg0(e, f, g).wrapping_add(h).wrapping_add(ss1).wrapping_add(w[i]);
+            d = c;
+            c = b.rotate_left(9);
+            b = a;
+            a = tt1;
+            h = g;
+            g = f.rotate_left(19);
+            f = e;
+            e = p0(tt2);
+
+//            println!("{} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} ", i, a, b, c, d, e, f, g, h);
         }
 
         for i in 16..64 {
-            ss1 = left_rotate(left_rotate(a, 12) + e + left_rotate(0x7a879d8a, i as u32), 7);
-            ss2 = ss1 ^ left_rotate(a, 12);
-            tt1=ff1(a,b,c)+d+ss2+w1[i];
-            tt2=gg1(e,f,g)+h+ss1+w[i];
-            d=c;
-            c=left_rotate(b,9);
-            b=a;
-            a=tt1;
-            h=g;
-            g=left_rotate(f,19);
-            f=e;
-            e=p0(tt2);
+            ss1 = a.rotate_left(12).wrapping_add(e).wrapping_add(0x7a879d8au32.rotate_left(i as u32)).rotate_left(7);
+            ss2 = ss1 ^ a.rotate_left(12);
+            tt1 = ff1(a, b, c).wrapping_add(d).wrapping_add(ss2).wrapping_add(w1[i]);
+            tt2 = gg1(e, f, g).wrapping_add(h).wrapping_add(ss1).wrapping_add(w[i]);
+            d = c;
+            c = b.rotate_left(9);
+            b = a;
+            a = tt1;
+            h = g;
+            g = f.rotate_left(19);
+            f = e;
+            e = p0(tt2);
         }
 
         self.digest[0] = a ^ self.digest[0];
@@ -175,10 +174,7 @@ impl Sm3Hash {
         self.digest[6] = g ^ self.digest[6];
         self.digest[7] = h ^ self.digest[7];
 
-        for i in self.digest.iter() {
-            print!("{:x} ", i);
-        }
-        println!();
+
     }
 }
 
@@ -186,28 +182,18 @@ impl Sm3Hash {
 mod tests {
     use super::*;
 
-
-    #[test]
-    fn tests(){
-        println!("{:32b}",left_rotate(0x7380166f, 12));
-        println!("{:32b}",0xa96f30bc);
-        println!("{:32b}",0x79cc4519);
-        println!("{:32b}",0x79cc4519+0xa96f30bc);
-        println!("{:32b}",(left_rotate(0x7380166f, 12)+0x79cc4519+0xa96f30bc)%0xffffffff);
-    }
-
     #[test]
     fn lets_hash() {
         let s = String::from("abc");
-        //let s = String::from("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
+//        let s = String::from("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
         let mut sm3 = Sm3Hash::new(&s);
-        println!("length: {:}", sm3.length);
-        println!("msg: {:?}", sm3.unhandle_msg);
-//        for i in sm3.unhandle_msg {
-//            print!("{:x}", i);
+
+        let hash = sm3.get_hash();
+
+//        for i in hash.iter() {
+//            print!("{:x} ", i);
 //        }
 //        println!();
-        let hash = sm3.get_hash();
 
         let standrad_hash: [u8; 32] = [
             0x66, 0xc7, 0xf0, 0xf4, 0x62, 0xee, 0xed, 0xd9,
@@ -217,7 +203,7 @@ mod tests {
         ];
 
         for i in 0..32 {
-            assert_eq!(standrad_hash[i], standrad_hash[i]);
+            assert_eq!(standrad_hash[i], hash[i]);
         }
     }
 }
