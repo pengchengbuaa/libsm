@@ -3,3 +3,4 @@ pub mod sm3;
 pub mod sm4;
 
 extern crate rand;
+extern crate byteorder;

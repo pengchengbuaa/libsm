@@ -5,3 +5,4 @@ authors = ["Nebula Moe <nebula_moe@outlook.com>"]
 
 [dependencies]
 rand = "0.4"
+byteorder = "1"

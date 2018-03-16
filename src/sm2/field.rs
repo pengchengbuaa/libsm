@@ -4,6 +4,8 @@
 // http://www.oscca.gov.cn/sca/xxgk/2010-12/17/1002386/files/b965ce832cc34bc191cb1cde446b860d.pdf
 // http://www.oscca.gov.cn/sca/xxgk/2010-12/17/1002386/files/b791a9f908bb4803875ab6aeeb7b4e03.pdf
 
+use byteorder::{BigEndian, WriteBytesExt};
+
 pub struct FieldCtx {
     modulus: FieldElem,
     modulus_complete: FieldElem,
@@ -90,7 +92,6 @@ impl FieldCtx {
         let mut carry: i32 = 0;
         let mut sum = FieldElem::zero();
 
-        println!("start reduction");
         for i in 1..5 {
             let (t, c) = raw_add(&sum, &s[i]);
             sum = t;
@@ -119,9 +120,6 @@ impl FieldCtx {
         sum = t;
         carry = carry - c as i32;
 
-        println!("get carry:{}", carry);
-        println!("get sum:{:?}", sum.value);
-
         while carry > 0 || sum.ge(&self.modulus) {
             let (s, b) = raw_sub(&sum, &self.modulus);
             sum = s;
@@ -136,11 +134,45 @@ impl FieldCtx {
         self.fast_reduction(&raw_prod)
     }
 
-    // TODO: Extended Eulidean Algorithm(EEA) to calculate x^(-1) mod p
+    // Extended Eulidean Algorithm(EEA) to calculate x^(-1) mod p
     // Reference:
-    // http://delta.cs.cinvestav.mx/~francisco/arith/julio.pdf for details
+    // http://delta.cs.cinvestav.mx/~francisco/arith/julio.pdf
     pub fn inv(&self, x: &FieldElem) -> FieldElem {
-        FieldElem::zero()
+        let mut u = *x;
+        let mut v = self.modulus;
+        let mut a = FieldElem::from_num(1);
+        let mut c = FieldElem::zero();
+
+        while !u.eq(&FieldElem::zero()) {
+            if u.is_even() {
+                u = u.div2(0);
+                if a.is_even() {
+                    a = a.div2(0);
+                } else {
+                    let (sum, car) = raw_add(&a, &self.modulus);
+                    a = sum.div2(car);
+                }
+            }
+
+            if v.is_even() {
+                v = v.div2(0);
+                if c.is_even() {
+                    c = c.div2(0);
+                } else {
+                    let (sum, car) = raw_add(&c, &self.modulus);
+                    c = sum.div2(car);
+                }
+            }
+
+            if u.ge(&v) {
+                u = self.sub(&u, &v);
+                a = self.sub(&a, &c);
+            } else {
+                v = self.sub(&v, &u);
+                c = self.sub(&c, &a);
+            }
+        }
+        return c;
     }
 
     // TODO: square root of a field element
@@ -252,10 +284,42 @@ impl FieldElem {
         return true;
     }
 
+    pub fn div2(&self, carry: u32) -> FieldElem {
+        let mut ret = FieldElem::zero();
+        let mut carry = carry;
+        for i in 0..8 {
+            ret.value[i] = (carry << 31) + (self.value[i] >> 1);
+            carry = self.value[i] & 0x01;
+        }
+        ret
+    }
 
-    // TODO: Conversions
-    pub fn to_bytes() {}
-    pub fn from_bytes() {}
+    pub fn is_even(&self) -> bool {
+        let x = self.value[7] & 0x01;
+        if x == 0 {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+
+    // Conversions
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut ret: Vec<u8> = Vec::new();
+        for i in 0..8 {
+            ret.write_u16::<BigEndian>(self.value[i]).unwrap();
+        }
+        ret
+    }
+    pub fn from_bytes(x: &[u8]) -> FieldElem {
+        if x.len() != 32 {
+            panic!("a SCA-256 field element must be 32-byte long");
+        }
+    }
+
+    pub fn to_bigint() {}
+    pub fn from_bigint() {}
 
     pub fn from_num(x: u64) -> FieldElem {
         let mut arr: [u32; 8] = [0; 8];
@@ -264,12 +328,6 @@ impl FieldElem {
 
         FieldElem::new(arr)
     }
-
-    pub fn to_hex() {}
-    pub fn from_hex(x: String) {}
-
-    pub fn to_digits() {}
-    pub fn from_digits(x: String) {}
 }
 
 #[cfg(test)]
@@ -331,12 +389,42 @@ mod tests {
         }
     }
 
-    // TODO: test multiplilcations
+    // test multiplilcations
     #[test]
     fn test_mul() {
         let ctx = FieldCtx::new();
         let x = raw_mul(&ctx.modulus, &ctx.modulus);
         let y = ctx.fast_reduction(&x);
         assert!(y.eq(&FieldElem::zero()));
+    }
+
+    #[test]
+    fn test_div2() {
+        let x = FieldElem::new([
+            0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+            0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff
+        ]);
+        let y = FieldElem::new([
+            0x7fffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+            0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff
+        ]);
+        assert!(y.eq(&x.div2(0)));
+        assert!(x.eq(&x.div2(1)));
+        assert!(!x.is_even());
+        assert!(FieldElem::from_num(10).is_even());
+    }
+
+    #[test]
+    fn test_inv() {
+        let ctx = FieldCtx::new();
+        let one = FieldElem::from_num(1);
+
+        for x in 1..100 {
+            let x = rand_elem();
+            let xinv = ctx.inv(&x);
+
+            let y = ctx.mul(&x, &xinv);
+            assert!(y.eq(&one));
+        }
     }
 }
