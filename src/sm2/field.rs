@@ -4,7 +4,9 @@
 // http://www.oscca.gov.cn/sca/xxgk/2010-12/17/1002386/files/b965ce832cc34bc191cb1cde446b860d.pdf
 // http://www.oscca.gov.cn/sca/xxgk/2010-12/17/1002386/files/b791a9f908bb4803875ab6aeeb7b4e03.pdf
 
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+use std::io::Cursor;
+use num_bigint::BigUint;
 
 pub struct FieldCtx {
     modulus: FieldElem,
@@ -20,7 +22,7 @@ impl FieldCtx {
             0xffffffff, 0x00000000, 0xffffffff, 0xffffffff
         ]);
 
-        let (modulus_complete, borrow) =
+        let (modulus_complete, _borrow) =
             raw_sub(&FieldElem::zero(), &modulus);
         FieldCtx {
             modulus,
@@ -31,7 +33,7 @@ impl FieldCtx {
     pub fn add(&self, a: &FieldElem, b: &FieldElem) -> FieldElem {
         let (raw_sum, carry) = raw_add(a, b);
         if carry == 1 || raw_sum.ge(&self.modulus) {
-            let (sum, borrow) = raw_sub(&raw_sum, &self.modulus);
+            let (sum, _borrow) = raw_sub(&raw_sum, &self.modulus);
             return sum;
         } else {
             return raw_sum;
@@ -41,7 +43,7 @@ impl FieldCtx {
     pub fn sub(&self, a: &FieldElem, b: &FieldElem) -> FieldElem {
         let (raw_diff, borrow) = raw_sub(a, b);
         if borrow == 1 {
-            let (diff, borrow) = raw_sub(&raw_diff, &self.modulus_complete);
+            let (diff, _borrow) = raw_sub(&raw_diff, &self.modulus_complete);
             return diff;
         } else {
             return raw_diff;
@@ -49,8 +51,8 @@ impl FieldCtx {
     }
 
     // a quick algorithm to reduce elements on SCA-256 field
-// Reference:
-// http://ieeexplore.ieee.org/document/7285166/ for details
+    // Reference:
+    // http://ieeexplore.ieee.org/document/7285166/ for details
     fn fast_reduction(&self, input: &[u32; 16]) -> FieldElem {
         let mut s: [FieldElem; 10] = [FieldElem::zero(); 10];
         let mut x: [u32; 16] = [0; 16];
@@ -308,7 +310,7 @@ impl FieldElem {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut ret: Vec<u8> = Vec::new();
         for i in 0..8 {
-            ret.write_u16::<BigEndian>(self.value[i]).unwrap();
+            ret.write_u32::<BigEndian>(self.value[i]).unwrap();
         }
         ret
     }
@@ -316,10 +318,31 @@ impl FieldElem {
         if x.len() != 32 {
             panic!("a SCA-256 field element must be 32-byte long");
         }
+        let mut elem = FieldElem::zero();
+        let mut c = Cursor::new(x);
+        for i in 0..8 {
+            let x = c.read_u32::<BigEndian>().unwrap();
+            elem.value[i] = x;
+        }
+        elem
     }
 
-    pub fn to_bigint() {}
-    pub fn from_bigint() {}
+    pub fn to_biguint(&self) -> BigUint {
+        let v = self.to_bytes();
+        BigUint::from_bytes_be(&v[..])
+    }
+    pub fn from_biguint(bi: &BigUint) -> FieldElem {
+        let v = bi.to_bytes_be();
+        let mut num_v: Vec<u8> = Vec::new();
+        let padding = 32 - v.len();
+        for _i in 0..padding {
+            num_v.push(0);
+        }
+        for i in v.iter() {
+            num_v.push(*i);
+        }
+        FieldElem::from_bytes(&num_v[..])
+    }
 
     pub fn from_num(x: u64) -> FieldElem {
         let mut arr: [u32; 8] = [0; 8];
@@ -327,6 +350,11 @@ impl FieldElem {
         arr[6] = (x >> 32) as u32;
 
         FieldElem::new(arr)
+    }
+
+    pub fn to_str(&self, radix: u32) -> String {
+        let b = self.to_biguint();
+        b.to_str_radix(radix)
     }
 }
 
@@ -370,7 +398,7 @@ mod tests {
         let ret = FieldElem::new(buf);
         let ctx = FieldCtx::new();
         if ret.ge(&ctx.modulus) {
-            let (ret, borrow) = raw_sub(&ret, &ctx.modulus);
+            let (ret, _borrow) = raw_sub(&ret, &ctx.modulus);
             return ret;
         }
         ret
@@ -380,7 +408,7 @@ mod tests {
     fn add_sub_rand_test() {
         let ctx = FieldCtx::new();
 
-        for i in 0..20 {
+        for _i in 0..20 {
             let a = rand_elem();
             let b = rand_elem();
             let c = ctx.add(&a, &b);
@@ -419,12 +447,34 @@ mod tests {
         let ctx = FieldCtx::new();
         let one = FieldElem::from_num(1);
 
-        for x in 1..100 {
+        for _x in 1..100 {
             let x = rand_elem();
             let xinv = ctx.inv(&x);
 
             let y = ctx.mul(&x, &xinv);
             assert!(y.eq(&one));
+        }
+    }
+
+    #[test]
+    fn test_byte_conversion() {
+        for _x in 1..100 {
+            let x = rand_elem();
+            let y = x.to_bytes();
+            let newx = FieldElem::from_bytes(&y[..]);
+
+            assert!(x.eq(&newx));
+        }
+    }
+
+    #[test]
+    fn test_bigint_conversion() {
+        for _x in 1..100 {
+            let x = rand_elem();
+            let y = x.to_biguint();
+            let newx = FieldElem::from_biguint(&y);
+
+            assert!(x.eq(&newx));
         }
     }
 }
