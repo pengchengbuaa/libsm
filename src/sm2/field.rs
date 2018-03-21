@@ -136,6 +136,14 @@ impl FieldCtx {
         self.fast_reduction(&raw_prod)
     }
 
+    pub fn square(&self, a: &FieldElem) -> FieldElem {
+        self.mul(a, a)
+    }
+
+    pub fn cubic(&self, a: &FieldElem) -> FieldElem {
+        self.mul(a, &self.mul(a, a))
+    }
+
     // Extended Eulidean Algorithm(EEA) to calculate x^(-1) mod p
     // Reference:
     // http://delta.cs.cinvestav.mx/~francisco/arith/julio.pdf
@@ -175,6 +183,10 @@ impl FieldCtx {
             }
         }
         return c;
+    }
+
+    pub fn neg(&self, x: FieldElem) -> FieldElem {
+        self.sub(&self.modulus, &x)
     }
 
     // TODO: square root of a field element
