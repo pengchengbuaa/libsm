@@ -31,6 +31,8 @@ impl EccCtx {
     pub fn new_point(&self, x: &FieldElem, y: &FieldElem) -> Point {
         let ctx = &self.fctx;
 
+        // Check if (x, y) is a valid point on the curve(affine projection)
+        // y^2 = x^3 + a * x + b
         let lhs = ctx.mul(&y, &y);
 
         let x_cubic = ctx.mul(&x, &ctx.mul(&x, &x));
@@ -49,6 +51,8 @@ impl EccCtx {
     pub fn new_jacobian(&self, x: &FieldElem, y: &FieldElem, z: &FieldElem) -> Point {
         let ctx = &self.fctx;
 
+        // Check if (x, y, z) is a valid point on the curve(in jacobian projection)
+        // y^2 = x^3 + a * x * z^4 + b * z^6
         let lhs = ctx.square(y);
 
         let r1 = ctx.cubic(x);
@@ -68,7 +72,7 @@ impl EccCtx {
         Point {
             x,
             y,
-            z,
+            z
         }
     }
 
@@ -97,6 +101,10 @@ impl EccCtx {
         (x, y)
     }
 
+    pub fn neg(&self, p: &Point) -> Point{
+        let neg_y = self.fctx.neg(&p.y);
+        self.new_jacobian(&p.x, &neg_y, &p.z)
+    }
 
     pub fn add(&self, p1: &Point, p2: &Point) {
         let ctx = &self.fctx;
@@ -108,11 +116,55 @@ impl EccCtx {
         let lam2 = ctx.mul(&p2.x, &ctx.square(&p1.z));
         let lam3 = ctx.sub(&lam1, lam2);
 
-        // TODO
+        let lam4 = ctx.mul(&p1.y, &ctx.cubic(&p2.z));
+        let lam5 = ctx.mul(&p2.y, &ctx.cubic(&p1.z));
+        let lam6 = ctx.sub(&lam4, lam5);
+
+        let lam7 = ctx.add(&lam1, &lam2);
+        let lam8 = ctx.add(&lam4, &lam5);
+
+        let x3 = ctx.sub(
+            &ctx.square(&lam6),
+            &ctx.mul(&lam7, &ctx.square(&lam3))
+        );
+
+        let lam9 = ctx.sub(
+            &ctx.mul(&lam7, ctx.square(&lam3)),
+            &ctx.mul(&FieldElem::from_num(2), &x3)
+        );
+
+        let inv2 = ctx.inv(&FieldElem::from_num(2));
+        let y2 = ctx.mul(
+            &inv2,
+            &ctx.sub(
+                &ctx.mul(&lam9, &lam6),
+                &ctx.mul(&lam8, &lam3)
+            )
+        );
+
+        let z3 = ctx.mul(&p1.z, &ctx.mul(&p2.z, &lam3));
+
+        self.new_jacobian(&x, &y, &z)
     }
 
     pub fn double(&self, p: &Point) {
+        let ctx = &self.fctx;
+        let lam1 = ctx.add(
+            &ctx.mul(&FieldElem::from_num(3), &ctx.square(&p.x)),
+            &ctx.mul(&self.a, &ctx.square(&ctx.square(&p.z)))
+        );
+        let lam2 = &ctx.mul(
+            &FieldElem::from_num(4),
+            &ctx.mul(&p.x, &ctx.square(&p.y)));
+        let lam3 = &ctx.mul(
+            &FieldElem::from_num(8),
+            &ctx.square(&ctx.square(&p.y)));
 
+        let x3 =
+        let y3 =
+        let z3 = &ctx.mul(
+            &FieldElem::from_num(2),
+            &ctx.mul(&p.y, &p.z));
     }
 
     pub fn scalar_mul(&self, p: &Point, m: &BigUint) {}
