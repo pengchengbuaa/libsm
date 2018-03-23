@@ -14,7 +14,7 @@ pub struct Point {
 }
 
 impl EccCtx {
-    pub fn new() {
+    pub fn new() -> EccCtx {
         EccCtx {
             fctx: FieldCtx::new(),
             a: FieldElem::new([
@@ -28,7 +28,8 @@ impl EccCtx {
         }
     }
 
-    pub fn new_point(&self, x: &FieldElem, y: &FieldElem) -> Point {
+    pub fn new_point(&self, x: &FieldElem, y: &FieldElem) -> Result<Point, String>
+    {
         let ctx = &self.fctx;
 
         // Check if (x, y) is a valid point on the curve(affine projection)
@@ -39,16 +40,21 @@ impl EccCtx {
         let ax = ctx.mul(&x, &self.a);
         let rhs = ctx.add(&self.b, &ctx.add(&x_cubic, &ax));
 
-        // TODO: Result, lhs == rhs
-
-        Point {
-            x,
-            y,
-            z: FieldElem::from_num(1),
+        if !lhs.eq(&rhs) {
+            return Err(String::from("invalid point"));
         }
+
+        let p = Point {
+            x: *x,
+            y: *y,
+            z: FieldElem::from_num(1),
+        };
+        return Ok(p);
     }
 
-    pub fn new_jacobian(&self, x: &FieldElem, y: &FieldElem, z: &FieldElem) -> Point {
+    pub fn new_jacobian(&self, x: &FieldElem, y: &FieldElem, z: &FieldElem)
+                        -> Result<Point, String>
+    {
         let ctx = &self.fctx;
 
         // Check if (x, y, z) is a valid point on the curve(in jacobian projection)
@@ -63,17 +69,21 @@ impl EccCtx {
 
         let r3 = ctx.cubic(z);
         let r3 = ctx.square(&r3);
-        let r3 = ctx.mul(&r2, &self.b);
+        let r3 = ctx.mul(&r3, &self.b);
 
         let rhs = ctx.add(&r1, &ctx.add(&r2, &r3));
 
-        // TODO: require lhs =rhs
-
-        Point {
-            x,
-            y,
-            z
+        // Require lhs =rhs
+        if !lhs.eq(&rhs) {
+            return Err(String::from("invalid jacobian point"));
         }
+
+        let p = Point {
+            x: *x,
+            y: *y,
+            z: *z,
+        };
+        return Ok(p);
     }
 
     pub fn generator(&self) -> Point {
@@ -86,7 +96,10 @@ impl EccCtx {
             0xD0A9877C, 0xC62A4740, 0x02DF32E5, 0x2139F0A0
         ]);
 
-        self.new_point(&x, &y)
+        match self.new_point(&x, &y) {
+            Ok(p) => p,
+            Err(m) => panic!(m),
+        }
     }
 
     pub fn to_affine(&self, p: &Point) -> (FieldElem, FieldElem) {
@@ -95,18 +108,21 @@ impl EccCtx {
             panic!("cannot convert the infinite point to affine");
         }
 
-        let zinv = ctx.inv(p.z);
+        let zinv = ctx.inv(&p.z);
         let x = ctx.mul(&p.x, &ctx.mul(&zinv, &zinv));
-        let y = ctx.mul(&p.x, &ctx.mul(&zinv, &ctx.mul(&zinv, &zinv)));
+        let y = ctx.mul(&p.y, &ctx.mul(&zinv, &ctx.mul(&zinv, &zinv)));
         (x, y)
     }
 
     pub fn neg(&self, p: &Point) -> Point{
         let neg_y = self.fctx.neg(&p.y);
-        self.new_jacobian(&p.x, &neg_y, &p.z)
+        match self.new_jacobian(&p.x, &neg_y, &p.z) {
+            Ok(neg_p) => neg_p,
+            Err(e) => panic!(e),
+        }
     }
 
-    pub fn add(&self, p1: &Point, p2: &Point) {
+    pub fn add(&self, p1: &Point, p2: &Point) -> Point {
         let ctx = &self.fctx;
         if self.eq(&p1, &p2) {
             return self.double(p1);
@@ -114,11 +130,11 @@ impl EccCtx {
 
         let lam1 = ctx.mul(&p1.x, &ctx.square(&p2.z));
         let lam2 = ctx.mul(&p2.x, &ctx.square(&p1.z));
-        let lam3 = ctx.sub(&lam1, lam2);
+        let lam3 = ctx.sub(&lam1, &lam2);
 
         let lam4 = ctx.mul(&p1.y, &ctx.cubic(&p2.z));
         let lam5 = ctx.mul(&p2.y, &ctx.cubic(&p1.z));
-        let lam6 = ctx.sub(&lam4, lam5);
+        let lam6 = ctx.sub(&lam4, &lam5);
 
         let lam7 = ctx.add(&lam1, &lam2);
         let lam8 = ctx.add(&lam4, &lam5);
@@ -129,49 +145,75 @@ impl EccCtx {
         );
 
         let lam9 = ctx.sub(
-            &ctx.mul(&lam7, ctx.square(&lam3)),
+            &ctx.mul(&lam7, &ctx.square(&lam3)),
             &ctx.mul(&FieldElem::from_num(2), &x3)
         );
 
         let inv2 = ctx.inv(&FieldElem::from_num(2));
-        let y2 = ctx.mul(
+        let y3 = ctx.mul(
             &inv2,
             &ctx.sub(
                 &ctx.mul(&lam9, &lam6),
-                &ctx.mul(&lam8, &lam3)
+                &ctx.mul(&lam8, &ctx.cubic(&lam3))
             )
         );
 
         let z3 = ctx.mul(&p1.z, &ctx.mul(&p2.z, &lam3));
 
-        self.new_jacobian(&x, &y, &z)
+        match self.new_jacobian(&x3, &y3, &z3) {
+            Ok(new_p) => new_p,
+            Err(e) => panic!(e),
+        }
     }
 
-    pub fn double(&self, p: &Point) {
+    pub fn double(&self, p: &Point) -> Point {
         let ctx = &self.fctx;
+        // λ1 = 3 * x1^2 + a * z1^4
         let lam1 = ctx.add(
             &ctx.mul(&FieldElem::from_num(3), &ctx.square(&p.x)),
             &ctx.mul(&self.a, &ctx.square(&ctx.square(&p.z)))
         );
+        // λ2 = 4 * x1 * y1^2
         let lam2 = &ctx.mul(
             &FieldElem::from_num(4),
             &ctx.mul(&p.x, &ctx.square(&p.y)));
+        // λ3 = 8 * y1^4
         let lam3 = &ctx.mul(
             &FieldElem::from_num(8),
             &ctx.square(&ctx.square(&p.y)));
 
-        let x3 =
-        let y3 =
+        // x3 = λ1^2 - 2 * λ2
+        let x3 = ctx.sub(
+            &ctx.square(&lam1),
+            &ctx.mul(&FieldElem::from_num(2), &lam2),
+        );
+        // y3 = λ1 * (λ2 - x3) - λ3
+        let y3 = ctx.sub(
+            &ctx.mul(
+                &lam1,
+                &ctx.sub(&lam2, &x3),
+            ),
+            &lam3,
+        );
+        // z3 = 2 * y1 * z1
         let z3 = &ctx.mul(
             &FieldElem::from_num(2),
             &ctx.mul(&p.y, &p.z));
+
+        match self.new_jacobian(&x3, &y3, &z3) {
+            Ok(new_p) => new_p,
+            Err(e) => panic!(e),
+        }
     }
 
-    pub fn scalar_mul(&self, p: &Point, m: &BigUint) {}
+    // TODO:
+    //pub fn scalar_mul(&self, p: &Point, m: &BigUint) {}
 
-    pub fn der_encode(&self, p: Point) {}
+    // TODO:
+    // pub fn der_encode(&self, p: Point) {}
 
-    pub fn parse(&self, buf: &[u8]) -> Point {}
+    // TODO:
+    // pub fn parse(&self, buf: &[u8]){}
 
     pub fn eq(&self, p1: &Point, p2: &Point) -> bool {
         let z1 = &p1.z;
@@ -204,5 +246,34 @@ impl Point {
         } else {
             return false;
         }
+    }
+}
+
+use std::fmt;
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let curve = EccCtx::new();
+        let (x, y) = curve.to_affine(self);
+        writeln!(f, "(x = {}, y = {})", x.to_str(10), y.to_str(10));
+        write!(f, "x: {}, y: {}, z:{}",
+               self.x.to_str(10), self.y.to_str(10), self.z.to_str(10))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_double_neg() {
+        let curve = EccCtx::new();
+        let g = curve.generator();
+
+        let neg_g = curve.neg(&g);
+        let double_g = curve.double(&g);
+        let new_g = curve.add(&double_g, &neg_g);
+
+        assert!(curve.eq(&g, &new_g));
     }
 }

@@ -185,8 +185,8 @@ impl FieldCtx {
         return c;
     }
 
-    pub fn neg(&self, x: FieldElem) -> FieldElem {
-        self.sub(&self.modulus, &x)
+    pub fn neg(&self, x: &FieldElem) -> FieldElem {
+        self.sub(&self.modulus, x)
     }
 
     // TODO: square root of a field element
@@ -487,6 +487,17 @@ mod tests {
             let newx = FieldElem::from_biguint(&y);
 
             assert!(x.eq(&newx));
+        }
+    }
+
+    #[test]
+    fn test_neg() {
+        let ctx = FieldCtx::new();
+        for _ in 0..100 {
+            let x = rand_elem();
+            let neg_x = ctx.neg(&x);
+            let zero = ctx.add(&x, &neg_x);
+            assert!(zero.eq(&FieldElem::zero()));
         }
     }
 }
