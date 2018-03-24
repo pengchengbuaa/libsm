@@ -5,3 +5,4 @@ pub mod sm4;
 extern crate rand;
 extern crate byteorder;
 extern crate num_bigint;
+extern crate num_traits;

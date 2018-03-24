@@ -7,3 +7,4 @@ authors = ["Nebula Moe <nebula_moe@outlook.com>"]
 rand = "0.4"
 byteorder = "1"
 num-bigint = "0.1"
+num-traits = "0.2"

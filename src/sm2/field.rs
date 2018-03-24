@@ -368,6 +368,10 @@ impl FieldElem {
         let b = self.to_biguint();
         b.to_str_radix(radix)
     }
+
+    pub fn get_value(&self, i:usize) -> u32{
+        self.value[i]
+    }
 }
 
 #[cfg(test)]

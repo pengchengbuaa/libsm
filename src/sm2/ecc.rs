@@ -1,12 +1,16 @@
 use super::field::*;
 use num_bigint::BigUint;
+use num_traits::*;
+use std::ops::Rem;
 
 pub struct EccCtx {
     fctx: FieldCtx,
     a: FieldElem,
     b: FieldElem,
+    n: BigUint,
 }
 
+#[derive(Clone)]
 pub struct Point {
     x: FieldElem,
     y: FieldElem,
@@ -25,6 +29,10 @@ impl EccCtx {
                 0x28E9FA9E, 0x9D9F5E34, 0x4D5A9E4B, 0xCF6509A7,
                 0xF39789F5, 0x15AB8F92, 0xDDBCBD41, 0x4D940E93
             ]),
+            n: BigUint::from_str_radix(
+                "FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54123",
+                16,
+            ).unwrap(),
         }
     }
 
@@ -102,6 +110,14 @@ impl EccCtx {
         }
     }
 
+    pub fn zero(&self) -> Point {
+        let x = FieldElem::from_num(1);
+        let y = FieldElem::from_num(1);
+        let z = FieldElem::zero();
+
+        self.new_jacobian(&x, &y, &z).unwrap()
+    }
+
     pub fn to_affine(&self, p: &Point) -> (FieldElem, FieldElem) {
         let ctx = &self.fctx;
         if p.is_zero() {
@@ -114,7 +130,7 @@ impl EccCtx {
         (x, y)
     }
 
-    pub fn neg(&self, p: &Point) -> Point{
+    pub fn neg(&self, p: &Point) -> Point {
         let neg_y = self.fctx.neg(&p.y);
         match self.new_jacobian(&p.x, &neg_y, &p.z) {
             Ok(neg_p) => neg_p,
@@ -122,8 +138,16 @@ impl EccCtx {
         }
     }
 
-    pub fn add(&self, p1: &Point, p2: &Point) -> Point {
+    pub fn add(&self, p1: &Point, p2: &Point) -> Point
+    {
+        if p1.is_zero() {
+            return p2.clone();
+        } else if p2.is_zero() {
+            return p1.clone();
+        }
+
         let ctx = &self.fctx;
+
         if self.eq(&p1, &p2) {
             return self.double(p1);
         }
@@ -141,12 +165,12 @@ impl EccCtx {
 
         let x3 = ctx.sub(
             &ctx.square(&lam6),
-            &ctx.mul(&lam7, &ctx.square(&lam3))
+            &ctx.mul(&lam7, &ctx.square(&lam3)),
         );
 
         let lam9 = ctx.sub(
             &ctx.mul(&lam7, &ctx.square(&lam3)),
-            &ctx.mul(&FieldElem::from_num(2), &x3)
+            &ctx.mul(&FieldElem::from_num(2), &x3),
         );
 
         let inv2 = ctx.inv(&FieldElem::from_num(2));
@@ -154,8 +178,8 @@ impl EccCtx {
             &inv2,
             &ctx.sub(
                 &ctx.mul(&lam9, &lam6),
-                &ctx.mul(&lam8, &ctx.cubic(&lam3))
-            )
+                &ctx.mul(&lam8, &ctx.cubic(&lam3)),
+            ),
         );
 
         let z3 = ctx.mul(&p1.z, &ctx.mul(&p2.z, &lam3));
@@ -171,7 +195,7 @@ impl EccCtx {
         // λ1 = 3 * x1^2 + a * z1^4
         let lam1 = ctx.add(
             &ctx.mul(&FieldElem::from_num(3), &ctx.square(&p.x)),
-            &ctx.mul(&self.a, &ctx.square(&ctx.square(&p.z)))
+            &ctx.mul(&self.a, &ctx.square(&ctx.square(&p.z))),
         );
         // λ2 = 4 * x1 * y1^2
         let lam2 = &ctx.mul(
@@ -206,8 +230,30 @@ impl EccCtx {
         }
     }
 
-    // TODO:
-    //pub fn scalar_mul(&self, p: &Point, m: &BigUint) {}
+    pub fn mul(&self, m: &BigUint, p: &Point) -> Point
+    {
+        let m = m.rem(self.n.clone());
+
+        let k = FieldElem::from_biguint(&m);
+
+        let mut q0 = self.zero();
+        let mut q1 = p.clone();
+
+        for i in 0..256 {
+            let index = i as usize / 32;
+            let bit = 31 - i as usize % 32;
+
+            let sum = self.add(&q0, &q1);
+            if (k.get_value(index) >> bit) & 0x01 == 0 {
+                q1 = sum;
+                q0 = self.double(&q0);
+            } else {
+                q0 = sum;
+                q1 = self.double(&q1);
+            }
+        }
+        q0
+    }
 
     // TODO:
     // pub fn der_encode(&self, p: Point) {}
@@ -215,7 +261,8 @@ impl EccCtx {
     // TODO:
     // pub fn parse(&self, buf: &[u8]){}
 
-    pub fn eq(&self, p1: &Point, p2: &Point) -> bool {
+    pub fn eq(&self, p1: &Point, p2: &Point) -> bool
+    {
         let z1 = &p1.z;
         let z2 = &p2.z;
         if z1.eq(&FieldElem::zero()) {
@@ -240,7 +287,8 @@ impl EccCtx {
 }
 
 impl Point {
-    pub fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool
+    {
         if self.z.eq(&FieldElem::zero()) {
             return true;
         } else {
@@ -252,12 +300,15 @@ impl Point {
 use std::fmt;
 
 impl fmt::Display for Point {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
         let curve = EccCtx::new();
-        let (x, y) = curve.to_affine(self);
-        writeln!(f, "(x = {}, y = {})", x.to_str(10), y.to_str(10));
-        write!(f, "x: {}, y: {}, z:{}",
-               self.x.to_str(10), self.y.to_str(10), self.z.to_str(10))
+        if self.is_zero() {
+            write!(f, "(O)")
+        } else {
+            let (x, y) = curve.to_affine(self);
+            write!(f, "(x = {}, y = {})", x.to_str(10), y.to_str(10))
+        }
     }
 }
 
@@ -266,14 +317,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_add_double_neg() {
+    fn test_add_double_neg()
+    {
         let curve = EccCtx::new();
         let g = curve.generator();
 
         let neg_g = curve.neg(&g);
         let double_g = curve.double(&g);
         let new_g = curve.add(&double_g, &neg_g);
+        let zero = curve.add(&g, &neg_g);
 
+        assert!(curve.eq(&g, &new_g));
+        assert!(zero.is_zero());
+    }
+
+    #[test]
+    fn test_multiplication()
+    {
+        let curve = EccCtx::new();
+        let g = curve.generator();
+
+        let double_g = curve.double(&g);
+        let twice_g = curve.mul(&BigUint::from_u32(2).unwrap(), &g);
+
+
+        assert!(curve.eq(&double_g, &twice_g));
+
+        let n = curve.n.clone() - BigUint::from_u32(1).unwrap();
+        let new_g = curve.mul(&n, &g);
+        let new_g = curve.add(&new_g, &double_g);
         assert!(curve.eq(&g, &new_g));
     }
 }
