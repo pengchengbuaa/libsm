@@ -18,6 +18,7 @@
 use super::field::*;
 use num_bigint::BigUint;
 use num_traits::*;
+use num_integer::Integer;
 use std::ops::Rem;
 
 pub struct EccCtx {
@@ -35,7 +36,8 @@ pub struct Point {
 }
 
 impl EccCtx {
-    pub fn new() -> EccCtx {
+    pub fn new() -> EccCtx
+    {
         EccCtx {
             fctx: FieldCtx::new(),
             a: FieldElem::new([
@@ -51,6 +53,59 @@ impl EccCtx {
                 16,
             ).unwrap(),
         }
+    }
+
+    pub fn inv_n(&self, x: &BigUint) -> BigUint
+    {
+        if x.clone() == BigUint::zero() {
+            panic!("zero has no inversion.");
+        }
+
+        let mut u = x.clone();
+        let mut v = self.n.clone();
+        let mut a = BigUint::one();
+        let mut c = BigUint::zero();
+
+        let n = self.n.clone();
+
+        let two = BigUint::from_u32(2).unwrap();
+
+        while u != BigUint::zero() {
+            if u.is_even() {
+                u = u / two.clone();
+                if a.is_even() {
+                    a = a / two.clone();
+                } else {
+                    a = (a + n.clone()) / two.clone();
+                }
+            }
+
+            if v.is_even() {
+                v = v / two.clone();
+                if c.is_even() {
+                    c = c / two.clone();
+                } else {
+                    c = (c + n.clone()) / two.clone();
+                }
+            }
+
+            if u >= v {
+                u = u - v.clone();
+                if a >= c {
+                    a = a - c.clone();
+                } else {
+                    a = a + n.clone() - c.clone();
+                }
+            } else {
+                v = v - u.clone();
+                if c >= a {
+                    c = c - a.clone();
+                } else {
+                    c = c + n.clone() - a.clone();
+                }
+            }
+        }
+        return c;
     }
 
     pub fn new_point(&self, x: &FieldElem, y: &FieldElem) -> Result<Point, String>
@@ -111,7 +166,8 @@ impl EccCtx {
         return Ok(p);
     }
 
-    pub fn generator(&self) -> Point {
+    pub fn generator(&self) -> Point
+    {
         let x = FieldElem::new([
             0x32C4AE2C, 0x1F198119, 0x5F990446, 0x6A39C994,
             0x8FE30BBF, 0xF2660BE1, 0x715A4589, 0x334C74C7
@@ -127,7 +183,8 @@ impl EccCtx {
         }
     }
 
-    pub fn zero(&self) -> Point {
+    pub fn zero(&self) -> Point
+    {
         let x = FieldElem::from_num(1);
         let y = FieldElem::from_num(1);
         let z = FieldElem::zero();
@@ -135,7 +192,8 @@ impl EccCtx {
         self.new_jacobian(&x, &y, &z).unwrap()
     }
 
-    pub fn to_affine(&self, p: &Point) -> (FieldElem, FieldElem) {
+    pub fn to_affine(&self, p: &Point) -> (FieldElem, FieldElem)
+    {
         let ctx = &self.fctx;
         if p.is_zero() {
             panic!("cannot convert the infinite point to affine");
@@ -147,7 +205,8 @@ impl EccCtx {
         (x, y)
     }
 
-    pub fn neg(&self, p: &Point) -> Point {
+    pub fn neg(&self, p: &Point) -> Point
+    {
         let neg_y = self.fctx.neg(&p.y);
         match self.new_jacobian(&p.x, &neg_y, &p.z) {
             Ok(neg_p) => neg_p,
@@ -201,13 +260,16 @@ impl EccCtx {
 
         let z3 = ctx.mul(&p1.z, &ctx.mul(&p2.z, &lam3));
 
-        match self.new_jacobian(&x3, &y3, &z3) {
-            Ok(new_p) => new_p,
-            Err(e) => panic!(e),
+        Point {
+            x: x3,
+            y: y3,
+            z: z3,
         }
+
     }
 
-    pub fn double(&self, p: &Point) -> Point {
+    pub fn double(&self, p: &Point) -> Point
+    {
         let ctx = &self.fctx;
         // λ1 = 3 * x1^2 + a * z1^4
         let lam1 = ctx.add(
@@ -237,13 +299,14 @@ impl EccCtx {
             &lam3,
         );
         // z3 = 2 * y1 * z1
-        let z3 = &ctx.mul(
+        let z3 = ctx.mul(
             &FieldElem::from_num(2),
             &ctx.mul(&p.y, &p.z));
 
-        match self.new_jacobian(&x3, &y3, &z3) {
-            Ok(new_p) => new_p,
-            Err(e) => panic!(e),
+        Point {
+            x: x3,
+            y: y3,
+            z: z3,
         }
     }
 
@@ -271,12 +334,6 @@ impl EccCtx {
         }
         q0
     }
-
-    // TODO:
-    // pub fn der_encode(&self, p: Point) {}
-
-    // TODO:
-    // pub fn parse(&self, buf: &[u8]){}
 
     pub fn eq(&self, p1: &Point, p2: &Point) -> bool
     {
@@ -333,6 +390,9 @@ impl fmt::Display for Point {
 mod tests {
     use super::*;
 
+    use rand::os::OsRng;
+    use rand::Rng;
+
     #[test]
     fn test_add_double_neg()
     {
@@ -364,5 +424,39 @@ mod tests {
         let new_g = curve.mul(&n, &g);
         let new_g = curve.add(&new_g, &double_g);
         assert!(curve.eq(&g, &new_g));
+    }
+
+    fn random_uint() -> BigUint
+    {
+        let mut rng = OsRng::new().unwrap();
+        let mut buf: [u8; 32] = [0; 32];
+        let curve = EccCtx::new();
+
+        let mut ret = BigUint::zero();
+
+        while true {
+            rng.fill_bytes(&mut buf[..]);
+            ret = BigUint::from_bytes_be(&buf[..]);
+            if ret < curve.n.clone() && ret != BigUint::zero() {
+                break;
+            }
+        }
+        ret
+    }
+
+    #[test]
+    fn test_inv_n()
+    {
+        let curve = EccCtx::new();
+
+        for i in 0..20 {
+            let r = random_uint();
+            let r_inv = curve.inv_n(&r);
+
+            let product = r * r_inv;
+            let product = product.rem(curve.n.clone());
+
+            assert_eq!(product, BigUint::one());
+        }
     }
 }

@@ -49,7 +49,8 @@ fn p1(x: u32) -> u32 {
     x ^ x.rotate_left(15) ^ x.rotate_left(23)
 }
 
-fn get_u32_be(b: &[u8; 64], i: usize) -> u32 {
+fn get_u32_be(b: &[u8; 64], i: usize) -> u32
+{
     let n: u32 = (b[i] as u32) << 24 | (b[i + 1] as u32) << 16 | (b[i + 2] as u32) << 8 | (b[i + 3] as u32) << 0;
     n
 }
@@ -61,7 +62,8 @@ pub struct Sm3Hash {
 }
 
 impl Sm3Hash {
-    pub fn new(data: &[u8]) -> Sm3Hash {
+    pub fn new(data: &[u8]) -> Sm3Hash
+    {
         let mut hash = Sm3Hash {
             digest: [0x7380166f, 0x4914b2b9, 0x172442d7, 0xda8a0600, 0xa96f30bc, 0x163138aa, 0xe38dee4d, 0xb0fb0e4e],
             length: (data.len() << 3) as u64,
@@ -73,7 +75,8 @@ impl Sm3Hash {
         hash
     }
 
-    pub fn get_hash(&mut self) -> [u8; 32] {
+    pub fn get_hash(&mut self) -> [u8; 32]
+    {
         let mut output: [u8; 32] = [0; 32];
         self.pad();
         let len = self.unhandle_msg.len();
@@ -97,7 +100,8 @@ impl Sm3Hash {
         output
     }
 
-    fn pad(&mut self) {
+    fn pad(&mut self)
+    {
         self.unhandle_msg.push(0x80);
         let blocksize = 64;
         while self.unhandle_msg.len() % blocksize != 56 {
@@ -118,7 +122,8 @@ impl Sm3Hash {
         }
     }
 
-    fn update(&mut self, buffer: &[u8; 64]) {
+    fn update(&mut self, buffer: &[u8; 64])
+    {
         //get expend
         let mut w: [u32; 68] = [0; 68];
         let mut w1: [u32; 64] = [0; 64];

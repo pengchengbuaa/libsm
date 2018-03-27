@@ -14,3 +14,49 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with libsm.  If not, see <http://www.gnu.org/licenses/>.
+
+use num_bigint::BigUint;
+use super::ecc::*;
+
+struct Signature {
+    r: BigUint,
+    s: BigUint,
+}
+
+impl Signature {
+    pub fn parse() // -> Signature
+    {}
+
+    pub fn der_encode(&self) // -> Vec<u8>
+    {
+        let ret: Vec<u8> = Vec::new();
+
+        let vr = self.r.to_bytes_be();
+        let vs = self.s.to_bytes_be();
+    }
+}
+
+struct SigCtx {
+    curve: EccCtx,
+}
+
+impl SigCtx {
+    pub fn new() -> SigCtx
+    {
+        SigCtx {
+            curve: EccCtx::new(),
+        }
+    }
+
+    pub fn sign(&self, msg: &[u8], sk: &BigUint) // -> Signature
+    {}
+
+    pub fn verify(&self, msg: &[u8], pk: &Point, sig: &Signature) // -> bool
+    {}
+
+    pub fn new_keypair() // -> (Point, BigUint)
+    {}
+}
+
+#[cfg(test)]
+mod tests {}
