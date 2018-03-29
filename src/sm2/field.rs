@@ -70,6 +70,7 @@ impl FieldCtx {
     // a quick algorithm to reduce elements on SCA-256 field
     // Reference:
     // http://ieeexplore.ieee.org/document/7285166/ for details
+    #[inline]
     fn fast_reduction(&self, input: &[u32; 16]) -> FieldElem
     {
         let mut s: [FieldElem; 10] = [FieldElem::zero(); 10];
@@ -155,10 +156,12 @@ impl FieldCtx {
         self.fast_reduction(&raw_prod)
     }
 
+    #[inline(always)]
     pub fn square(&self, a: &FieldElem) -> FieldElem {
         self.mul(a, a)
     }
 
+    #[inline(always)]
     pub fn cubic(&self, a: &FieldElem) -> FieldElem {
         self.mul(a, &self.mul(a, a))
     }
