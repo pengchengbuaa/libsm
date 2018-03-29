@@ -100,8 +100,6 @@ impl SigCtx {
         let e = self.hash("1234567812345678", pk, msg);
         let e = BigUint::from_bytes_be(&e[..]);
 
-        println!("e = {}", e);
-
         // two while loops
         loop {
             // k = rand()
@@ -150,14 +148,12 @@ impl SigCtx {
         //Get hash value
         let e = self.hash("1234567812345678", pk, msg);
         let e = BigUint::from_bytes_be(&e[..]);
-        println!("e = {}", e);
 
         // calculate R
         let t = (sig.s.clone() + sig.r.clone()) % curve.get_n();
         if t == BigUint::zero() {
             return false;
         }
-        println!("t = {}", t);
 
         let p_1 = curve.add(
             &curve.mul(&sig.s, &curve.generator()),
@@ -165,12 +161,10 @@ impl SigCtx {
         );
         let (x_1, _) = curve.to_affine(&p_1);
         let x_1 = x_1.to_biguint();
-        println!("x = {}", x_1);
 
         let r_ = (e + x_1) % curve.get_n();
 
         // check R == r?
-        println!("r_ = {}", r_);
         if r_ == sig.r {
             return true;
         }
@@ -204,17 +198,13 @@ mod tests {
     #[test]
     fn test_sign_and_verify()
     {
-        println!("n = 0xFFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54123");
         let string = String::from("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
         let msg = string.as_bytes();
 
         let ctx = SigCtx::new();
         let (pk, sk) = ctx.new_keypair();
-        println!("sk = {}", sk);
 
         let signature = ctx.sign(msg, &sk, &pk);
-
-        println!("r = {}\ns = {}", signature.r, signature.s);
 
         assert!(ctx.verify(msg, &pk, &signature));
     }

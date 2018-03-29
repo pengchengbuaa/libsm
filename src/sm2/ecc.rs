@@ -451,40 +451,6 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_simulation() {
-        let curve = EccCtx::new();
-        let g = curve.generator();
-
-        let k = BigUint::from_str_radix(
-            "69983600719968403313769952279697863661808612736735433205044829535358614847623",
-            10).unwrap();
-        let sk = BigUint::from_str_radix(
-            "35946364483779843511937619607220820305352699225241046676451497498249902141924",
-            10).unwrap();
-        let s = BigUint::from_str_radix(
-            "11589761413695714759564783458228308944829057685195070935462071303582169496426",
-            10).unwrap();
-        let r = BigUint::from_str_radix(
-            "85474708571867494097238742001779661248667723740177696065504097827471123254120",
-            10).unwrap();
-        let t = (s.clone() + r.clone()) % curve.get_n();
-        let t2 = BigUint::from_str_radix(
-            "58393839306272688554205168821469554716979555051540362269582758231776445351197",
-            10).unwrap();
-
-        let pk = curve.mul(&sk, &g);
-        let p3 = curve.mul(&t, &g);
-
-        println!("p1={}\np2={}", curve.mul(&sk, &p3), curve.mul(&t, &pk));
-        let num_1 = (sk.clone() * t.clone()) % curve.get_n();
-        println!("p3={}", curve.mul(&num_1, &g));
-
-        println!("p3={}", curve.mul(&k, &g));
-    }
-
-
-
-    #[test]
     fn test_inv_n()
     {
         let curve = EccCtx::new();
