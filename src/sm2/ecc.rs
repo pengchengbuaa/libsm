@@ -21,6 +21,9 @@ use num_traits::*;
 use num_integer::Integer;
 use std::ops::Rem;
 
+use rand::os::OsRng;
+use rand::Rng;
+
 pub struct EccCtx {
     fctx: FieldCtx,
     a: FieldElem,
@@ -54,6 +57,12 @@ impl EccCtx {
             ).unwrap(),
         }
     }
+
+    pub fn get_a(&self) -> Vec<u8> { self.a.to_bytes() }
+    pub fn get_b(&self) -> Vec<u8> { self.b.to_bytes() }
+    pub fn get_n(&self) -> BigUint { self.n.clone() }
+
+
 
     pub fn inv_n(&self, x: &BigUint) -> BigUint
     {
@@ -358,6 +367,23 @@ impl EccCtx {
             return false;
         }
     }
+
+    pub fn random_uint(&self) -> BigUint
+    {
+        let mut rng = OsRng::new().unwrap();
+        let mut buf: [u8; 32] = [0; 32];
+
+        let mut ret;
+
+        loop {
+            rng.fill_bytes(&mut buf[..]);
+            ret = BigUint::from_bytes_be(&buf[..]);
+            if ret < self.n.clone() - BigUint::one() && ret != BigUint::zero() {
+                break;
+            }
+        }
+        ret
+    }
 }
 
 impl Point {
@@ -386,12 +412,11 @@ impl fmt::Display for Point {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use rand::os::OsRng;
-    use rand::Rng;
 
     #[test]
     fn test_add_double_neg()
@@ -426,23 +451,7 @@ mod tests {
         assert!(curve.eq(&g, &new_g));
     }
 
-    fn random_uint() -> BigUint
-    {
-        let mut rng = OsRng::new().unwrap();
-        let mut buf: [u8; 32] = [0; 32];
-        let curve = EccCtx::new();
 
-        let mut ret = BigUint::zero();
-
-        while true {
-            rng.fill_bytes(&mut buf[..]);
-            ret = BigUint::from_bytes_be(&buf[..]);
-            if ret < curve.n.clone() && ret != BigUint::zero() {
-                break;
-            }
-        }
-        ret
-    }
 
     #[test]
     fn test_inv_n()
