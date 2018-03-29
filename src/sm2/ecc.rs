@@ -19,7 +19,6 @@ use super::field::*;
 use num_bigint::BigUint;
 use num_traits::*;
 use num_integer::Integer;
-use std::ops::Rem;
 
 use rand::os::OsRng;
 use rand::Rng;
@@ -321,7 +320,7 @@ impl EccCtx {
 
     pub fn mul(&self, m: &BigUint, p: &Point) -> Point
     {
-        let m = m.rem(self.n.clone());
+        let m = m % self.get_n();
 
         let k = FieldElem::from_biguint(&m);
 
@@ -445,10 +444,42 @@ mod tests {
 
         assert!(curve.eq(&double_g, &twice_g));
 
-        let n = curve.n.clone() - BigUint::from_u32(1).unwrap();
+        let n = curve.n.clone() - BigUint::one();
         let new_g = curve.mul(&n, &g);
         let new_g = curve.add(&new_g, &double_g);
         assert!(curve.eq(&g, &new_g));
+    }
+
+    #[test]
+    fn test_verify_simulation() {
+        let curve = EccCtx::new();
+        let g = curve.generator();
+
+        let k = BigUint::from_str_radix(
+            "69983600719968403313769952279697863661808612736735433205044829535358614847623",
+            10).unwrap();
+        let sk = BigUint::from_str_radix(
+            "35946364483779843511937619607220820305352699225241046676451497498249902141924",
+            10).unwrap();
+        let s = BigUint::from_str_radix(
+            "11589761413695714759564783458228308944829057685195070935462071303582169496426",
+            10).unwrap();
+        let r = BigUint::from_str_radix(
+            "85474708571867494097238742001779661248667723740177696065504097827471123254120",
+            10).unwrap();
+        let t = (s.clone() + r.clone()) % curve.get_n();
+        let t2 = BigUint::from_str_radix(
+            "58393839306272688554205168821469554716979555051540362269582758231776445351197",
+            10).unwrap();
+
+        let pk = curve.mul(&sk, &g);
+        let p3 = curve.mul(&t, &g);
+
+        println!("p1={}\np2={}", curve.mul(&sk, &p3), curve.mul(&t, &pk));
+        let num_1 = (sk.clone() * t.clone()) % curve.get_n();
+        println!("p3={}", curve.mul(&num_1, &g));
+
+        println!("p3={}", curve.mul(&k, &g));
     }
 
 
@@ -458,12 +489,12 @@ mod tests {
     {
         let curve = EccCtx::new();
 
-        for i in 0..20 {
-            let r = random_uint();
+        for _ in 0..20 {
+            let r = curve.random_uint();
             let r_inv = curve.inv_n(&r);
 
             let product = r * r_inv;
-            let product = product.rem(curve.n.clone());
+            let product = product % curve.get_n();
 
             assert_eq!(product, BigUint::one());
         }
