@@ -1,5 +1,21 @@
+// Copyright (C) 2018
 //
-// Created by Niujx on 2018-03-12.
+// This file is part of libsm.
+//
+// libsm is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// libsm is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with libsm.  If not, see <http://www.gnu.org/licenses/>.
+
+
 //
 // Sample 1
 // Input:"abc"
@@ -33,7 +49,8 @@ fn p1(x: u32) -> u32 {
     x ^ x.rotate_left(15) ^ x.rotate_left(23)
 }
 
-fn get_u32_be(b: &[u8; 64], i: usize) -> u32 {
+fn get_u32_be(b: &[u8; 64], i: usize) -> u32
+{
     let n: u32 = (b[i] as u32) << 24 | (b[i + 1] as u32) << 16 | (b[i + 2] as u32) << 8 | (b[i + 3] as u32) << 0;
     n
 }
@@ -45,7 +62,8 @@ pub struct Sm3Hash {
 }
 
 impl Sm3Hash {
-    pub fn new(data: &[u8]) -> Sm3Hash {
+    pub fn new(data: &[u8]) -> Sm3Hash
+    {
         let mut hash = Sm3Hash {
             digest: [0x7380166f, 0x4914b2b9, 0x172442d7, 0xda8a0600, 0xa96f30bc, 0x163138aa, 0xe38dee4d, 0xb0fb0e4e],
             length: (data.len() << 3) as u64,
@@ -57,7 +75,8 @@ impl Sm3Hash {
         hash
     }
 
-    pub fn get_hash(&mut self) -> [u8; 32] {
+    pub fn get_hash(&mut self) -> [u8; 32]
+    {
         let mut output: [u8; 32] = [0; 32];
         self.pad();
         let len = self.unhandle_msg.len();
@@ -81,7 +100,8 @@ impl Sm3Hash {
         output
     }
 
-    fn pad(&mut self) {
+    fn pad(&mut self)
+    {
         self.unhandle_msg.push(0x80);
         let blocksize = 64;
         while self.unhandle_msg.len() % blocksize != 56 {
@@ -102,7 +122,8 @@ impl Sm3Hash {
         }
     }
 
-    fn update(&mut self, buffer: &[u8; 64]) {
+    fn update(&mut self, buffer: &[u8; 64])
+    {
         //get expend
         let mut w: [u32; 68] = [0; 68];
         let mut w1: [u32; 64] = [0; 64];
