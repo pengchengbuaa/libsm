@@ -28,6 +28,7 @@ pub struct EccCtx {
     a: FieldElem,
     b: FieldElem,
     n: BigUint,
+    inv2: FieldElem,
 }
 
 #[derive(Clone)]
@@ -40,6 +41,7 @@ pub struct Point {
 impl EccCtx {
     pub fn new() -> EccCtx
     {
+        let fctx = FieldCtx::new();
         EccCtx {
             fctx: FieldCtx::new(),
             a: FieldElem::new([
@@ -54,6 +56,7 @@ impl EccCtx {
                 "FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54123",
                 16,
             ).unwrap(),
+            inv2: fctx.inv(&FieldElem::from_num(2)),
         }
     }
 
@@ -232,9 +235,9 @@ impl EccCtx {
 
         let ctx = &self.fctx;
 
-        if self.eq(&p1, &p2) {
-            return self.double(p1);
-        }
+        //if self.eq(&p1, &p2) {
+        //    return self.double(p1);
+        //}
 
         let lam1 = ctx.mul(&p1.x, &ctx.square(&p2.z));
         let lam2 = ctx.mul(&p2.x, &ctx.square(&p1.z));
@@ -257,9 +260,9 @@ impl EccCtx {
             &ctx.mul(&FieldElem::from_num(2), &x3),
         );
 
-        let inv2 = ctx.inv(&FieldElem::from_num(2));
+
         let y3 = ctx.mul(
-            &inv2,
+            &self.inv2,
             &ctx.sub(
                 &ctx.mul(&lam9, &lam6),
                 &ctx.mul(&lam8, &ctx.cubic(&lam3)),
@@ -427,6 +430,7 @@ mod tests {
         let double_g = curve.double(&g);
         let new_g = curve.add(&double_g, &neg_g);
         let zero = curve.add(&g, &neg_g);
+
 
         assert!(curve.eq(&g, &new_g));
         assert!(zero.is_zero());
