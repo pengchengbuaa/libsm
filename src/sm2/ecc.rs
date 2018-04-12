@@ -143,6 +143,9 @@ impl EccCtx {
         return Ok(p);
     }
 
+    // TODO: load point
+    // pub fn load_point(&self, buf: &[u8]) -> Result<Point, bool>
+
     pub fn new_jacobian(&self, x: &FieldElem, y: &FieldElem, z: &FieldElem)
                         -> Result<Point, String>
     {
