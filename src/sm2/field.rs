@@ -21,6 +21,7 @@
 use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
 use std::io::Cursor;
 use num_bigint::BigUint;
+use num_traits::Num;
 
 pub struct FieldCtx {
     modulus: FieldElem,
@@ -31,7 +32,7 @@ impl FieldCtx {
     pub fn new() -> FieldCtx
     {
         // p = FFFFFFFE FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF 00000000 FFFFFFFF FFFFFFFF
-        //   = 2^256 - 2^224 - 2^96 + 2^32 -1
+        //   = 2^256 - 2^224 - 2^96 + 2^64 -1
         let modulus = FieldElem::new([
             0xfffffffe, 0xffffffff, 0xffffffff, 0xffffffff,
             0xffffffff, 0x00000000, 0xffffffff, 0xffffffff
@@ -216,8 +217,45 @@ impl FieldCtx {
         self.sub(&self.modulus, x)
     }
 
-    // TODO: square root of a field element
-    // pub fn sqrt(&self, x: FieldElem) -> FieldElem(){}
+    fn exp(&self, x: &FieldElem, n: &BigUint) -> FieldElem
+    {
+        let u = FieldElem::from_biguint(n);
+
+        let mut q0 = FieldElem::from_num(1);
+        let mut q1 = x.clone();
+
+        for i in 0..256 {
+            let index = i as usize / 32;
+            let bit = 31 - i as usize % 32;
+
+            let sum = self.mul(&q0, &q1);
+            if (u.get_value(index) >> bit) & 0x01 == 0 {
+                q1 = sum;
+                q0 = self.square(&q0);
+            } else {
+                q0 = sum;
+                q1 = self.square(&q1);
+            }
+        }
+        q0
+    }
+
+    // Square root of a field element
+    pub fn sqrt(&self, g: &FieldElem) -> Result<FieldElem, bool>
+    {
+        // p = 4 * u + 3
+        // u = u + 1
+        let u = BigUint::from_str_radix(
+            "28948022302589062189105086303505223191562588497981047863605298483322421248000",
+            10,
+        ).unwrap();
+
+        let y = self.exp(g, &u);
+        if self.square(&y).eq(g){
+            return Ok(y);
+        }
+        return Err(true);
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -555,6 +593,19 @@ mod tests {
             let neg_x = ctx.neg(&x);
             let zero = ctx.add(&x, &neg_x);
             assert!(zero.eq(&FieldElem::zero()));
+        }
+    }
+
+    #[test]
+    fn test_sqrt(){
+        let ctx = FieldCtx::new();
+
+        for _ in 0..10{
+            let x = rand_elem();
+            let x_2 = ctx.square(&x);
+            let new_x = ctx.sqrt(&x_2).unwrap();
+
+            assert!(x.eq(&new_x) || ctx.add(&x, &new_x).eq(&FieldElem::zero()));
         }
     }
 }
