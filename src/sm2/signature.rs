@@ -20,6 +20,8 @@ use super::ecc::*;
 use sm3::hash::Sm3Hash;
 use num_traits::*;
 
+use yasna;
+
 use byteorder::{BigEndian, WriteBytesExt};
 
 pub struct Signature {
@@ -28,15 +30,57 @@ pub struct Signature {
 }
 
 impl Signature {
-    pub fn parse() // -> Signature
-    {}
-
-    pub fn der_encode(&self) // -> Vec<u8>
+    pub fn der_decode(buf: &[u8]) -> Result<Signature, yasna::ASN1Error>
     {
-        // let ret: Vec<u8> = Vec::new();
+        let (r, s) = yasna::parse_der(buf, |reader| {
+            reader.read_sequence(|reader| {
+                let r = reader.next().read_biguint()?;
+                let s = reader.next().read_biguint()?;
+                return Ok((r, s));
+            })
+        })?;
+        Ok(Signature {
+            r,
+            s,
+        })
+    }
 
-        // let vr = self.r.to_bytes_be();
-        // let vs = self.s.to_bytes_be();
+    pub fn der_decode_raw(buf: &[u8]) -> Result<Signature, bool>
+    {
+        if buf[0] != 0x02 {
+            return Err(true);
+        }
+        let r_len: usize = buf[1] as usize;
+        if buf.len() <= r_len + 4 {
+            return Err(true);
+        }
+        let r = BigUint::from_bytes_be(&buf[2..2 + r_len]);
+
+        let buf = &buf[2 + r_len..];
+        if buf[0] != 0x02 {
+            return Err(true);
+        }
+        let s_len: usize = buf[1] as usize;
+        if buf.len() < s_len + 2 {
+            return Err(true);
+        }
+        let s = BigUint::from_bytes_be(&buf[2..2 + s_len]);
+
+        return Ok(Signature {
+            r,
+            s,
+        })
+    }
+
+    pub fn der_encode(&self) -> Vec<u8>
+    {
+        let der = yasna::construct_der(|writer| {
+            writer.write_sequence(|writer| {
+                writer.next().write_biguint(&self.r);
+                writer.next().write_biguint(&self.s);
+            })
+        });
+        return der;
     }
 }
 
@@ -204,8 +248,22 @@ mod tests {
         let ctx = SigCtx::new();
         let (pk, sk) = ctx.new_keypair();
 
-
         let signature = ctx.sign(msg, &sk, &pk);
         assert!(ctx.verify(msg, &pk, &signature));
+    }
+
+    #[test]
+    fn test_sig_encode_and_decode()
+    {
+        let string = String::from("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
+        let msg = string.as_bytes();
+
+        let ctx = SigCtx::new();
+        let (pk, sk) = ctx.new_keypair();
+
+        let signature = ctx.sign(msg, &sk, &pk);
+        let der = signature.der_encode();
+        let sig = Signature::der_decode(&der[..]).unwrap();
+        assert!(ctx.verify(msg, &pk, &sig));
     }
 }

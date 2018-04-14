@@ -25,3 +25,4 @@ extern crate byteorder;
 extern crate num_bigint;
 extern crate num_traits;
 extern crate num_integer;
+extern crate yasna;
