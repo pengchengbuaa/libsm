@@ -265,5 +265,10 @@ mod tests {
         let der = signature.der_encode();
         let sig = Signature::der_decode(&der[..]).unwrap();
         assert!(ctx.verify(msg, &pk, &sig));
+
+        let signature = ctx.sign(msg, &sk, &pk);
+        let der = signature.der_encode();
+        let sig = Signature::der_decode_raw(&der[2..]).unwrap();
+        assert!(ctx.verify(msg, &pk, &sig));
     }
 }

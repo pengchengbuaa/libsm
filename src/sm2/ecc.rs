@@ -389,6 +389,73 @@ impl EccCtx {
         }
         ret
     }
+
+    pub fn point_to_bytes(&self, p: &Point, compress: bool) -> Vec<u8>
+    {
+        let (x, y) = self.to_affine(p);
+        let mut ret: Vec<u8> = Vec::new();
+
+        if compress {
+            if y.get_value(7) & 0x01 == 0 {
+                ret.push(0x02);
+            } else {
+                ret.push(0x03);
+            }
+            let mut x_vec = x.to_bytes();
+            ret.append(&mut x_vec);
+        } else {
+            ret.push(0x04);
+            let mut x_vec = x.to_bytes();
+            let mut y_vec = y.to_bytes();
+            ret.append(&mut x_vec);
+            ret.append(&mut y_vec);
+        }
+        ret
+    }
+
+    pub fn bytes_to_point(&self, b: &[u8]) -> Result<Point, bool>
+    {
+        let ctx = &self.fctx;
+
+        if b.len() == 33 {
+            let y_q;
+            if b[0] == 0x02 {
+                y_q = 0;
+            } else if b[0] == 0x03 {
+                y_q = 1
+            } else {
+                return Err(true);
+            }
+
+            let x = FieldElem::from_bytes(&b[1..]);
+
+            let x_cubic = ctx.mul(&x, &ctx.mul(&x, &x));
+            let ax = ctx.mul(&x, &self.a);
+            let y_2 = ctx.add(&self.b, &ctx.add(&x_cubic, &ax));
+
+            let mut y = self.fctx.sqrt(&y_2)?;
+            if y.get_value(7) & 0x01 != y_q {
+                y = self.fctx.neg(&y);
+            }
+
+            match self.new_point(&x, &y) {
+                Ok(p) => { return Ok(p); },
+                Err(_) => { return Err(true); },
+            }
+        } else if b.len() == 65 {
+            if b[0] != 0x04 {
+                return Err(true);
+            }
+            let x = FieldElem::from_bytes(&b[1..33]);
+            let y = FieldElem::from_bytes(&b[33..65]);
+            match self.new_point(&x, &y) {
+                Ok(p) => { return Ok(p); },
+                Err(_) => { return Err(true); },
+            }
+        } else {
+            return Err(true);
+        }
+    }
 }
 
 impl Point {
@@ -471,5 +538,35 @@ mod tests {
 
             assert_eq!(product, BigUint::one());
         }
+    }
+
+    #[test]
+    fn test_point_bytes_conversion()
+    {
+        let curve = EccCtx::new();
+
+        let g = curve.generator();
+        let g_bytes_uncomp = curve.point_to_bytes(&g, false);
+        let new_g = curve.bytes_to_point(&g_bytes_uncomp[..]).unwrap();
+        assert!(curve.eq(&g, &new_g));
+        let g_bytes_comp = curve.point_to_bytes(&g, true);
+        let new_g = curve.bytes_to_point(&g_bytes_comp[..]).unwrap();
+        assert!(curve.eq(&g, &new_g));
+
+        let g = curve.double(&g);
+        let g_bytes_uncomp = curve.point_to_bytes(&g, false);
+        let new_g = curve.bytes_to_point(&g_bytes_uncomp[..]).unwrap();
+        assert!(curve.eq(&g, &new_g));
+        let g_bytes_comp = curve.point_to_bytes(&g, true);
+        let new_g = curve.bytes_to_point(&g_bytes_comp[..]).unwrap();
+        assert!(curve.eq(&g, &new_g));
+
+        let g = curve.double(&g);
+        let g_bytes_uncomp = curve.point_to_bytes(&g, false);
+        let new_g = curve.bytes_to_point(&g_bytes_uncomp[..]).unwrap();
+        assert!(curve.eq(&g, &new_g));
+        let g_bytes_comp = curve.point_to_bytes(&g, true);
+        let new_g = curve.bytes_to_point(&g_bytes_comp[..]).unwrap();
+        assert!(curve.eq(&g, &new_g));
     }
 }
