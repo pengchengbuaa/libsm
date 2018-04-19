@@ -27,7 +27,7 @@ pub struct EccCtx {
     fctx: FieldCtx,
     a: FieldElem,
     b: FieldElem,
-    n: BigUint,
+    pub n: BigUint,
     inv2: FieldElem,
 }
 
