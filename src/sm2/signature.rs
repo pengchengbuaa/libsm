@@ -19,6 +19,7 @@ use num_bigint::BigUint;
 use super::ecc::*;
 use sm3::hash::Sm3Hash;
 use num_traits::*;
+use super::field::FieldElem;
 
 use yasna;
 
@@ -233,6 +234,37 @@ impl SigCtx {
 
         return (pk, sk);
     }
+
+    pub fn load_pubkey(&self, buf: &[u8]) -> Result<Point, bool>
+    {
+        self.curve.bytes_to_point(buf)
+    }
+
+    pub fn serialize_pubkey(&self, p: &Point, compress: bool) -> Vec<u8>
+    {
+        self.curve.point_to_bytes(p, compress)
+    }
+
+    pub fn load_seckey(&self, buf: &[u8]) -> Result<BigUint, bool>
+    {
+        if buf.len() != 32 {
+            return Err(true);
+        }
+        let sk = BigUint::from_bytes_be(buf);
+        if sk > self.curve.n {
+            return Err(true);
+        }
+        return Ok(sk);
+    }
+
+    pub fn serialize_seckey(&self, x: &BigUint) -> Vec<u8>
+    {
+        if *x > self.curve.n {
+            panic!("invalid secret key");
+        }
+        let x = FieldElem::from_biguint(x);
+        x.to_bytes()
+    }
 }
 
 #[cfg(test)]
@@ -265,5 +297,25 @@ mod tests {
         let der = signature.der_encode();
         let sig = Signature::der_decode(&der[..]).unwrap();
         assert!(ctx.verify(msg, &pk, &sig));
+
+        let signature = ctx.sign(msg, &sk, &pk);
+        let der = signature.der_encode();
+        let sig = Signature::der_decode_raw(&der[2..]).unwrap();
+        assert!(ctx.verify(msg, &pk, &sig));
+    }
+
+    #[test]
+    fn test_key_serialization()
+    {
+        let ctx = SigCtx::new();
+        let (pk, sk) = ctx.new_keypair();
+
+        let pk_v = ctx.serialize_pubkey(&pk, true);
+        let new_pk = ctx.load_pubkey(&pk_v[..]).unwrap();
+        assert!(ctx.curve.eq(&new_pk, &pk));
+
+        let sk_v = ctx.serialize_seckey(&sk);
+        let new_sk = ctx.load_seckey(&sk_v[..]).unwrap();
+        assert!(new_sk == sk);
     }
 }

@@ -1,7 +1,7 @@
 [package]
 name = "libsm"
 version = "0.1.0"
-authors = ["Nebula Moe <nebula_moe@outlook.com>"]
+authors = ["Nebula Moe <nebula_moe@outlook.com>", "Itachi666"]
 
 [dependencies]
 rand = "0.4"
