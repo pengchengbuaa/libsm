@@ -200,6 +200,9 @@ impl SigCtx {
 
     pub fn verify_raw(&self, digest: &[u8], pk: &Point, sig: &Signature) -> bool
     {
+        if digest.len() != 32{
+            panic!("the length of digest must be 32-bytes.");
+        }
         let e = BigUint::from_bytes_be(digest);
 
         let curve = &self.curve;
