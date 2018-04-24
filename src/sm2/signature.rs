@@ -108,20 +108,22 @@ impl SigCtx {
         prepend.write_u16::<BigEndian>(id.len() as u16).unwrap();
         for c in id.bytes() { prepend.push(c); }
 
-        let a = curve.get_a();
-        let b = curve.get_b();
-        prepend.extend_from_slice(&a[..]);
-        prepend.extend_from_slice(&b[..]);
+        let mut a = curve.get_a();
+        let mut b = curve.get_b();
+
+        prepend.append(&mut a);
+        prepend.append(&mut b);
 
         let (x_g, y_g) = curve.to_affine(&curve.generator());
-        let (x_g, y_g) = (x_g.to_bytes(), y_g.to_bytes());
-        prepend.extend_from_slice(&x_g[..]);
-        prepend.extend_from_slice(&y_g[..]);
+        let (mut x_g, mut y_g) = (x_g.to_bytes(), y_g.to_bytes());
+        prepend.append(&mut x_g);
+        prepend.append(&mut y_g);
 
         let (x_a, y_a) = curve.to_affine(pk);
-        let (x_a, y_a) = (x_a.to_bytes(), y_a.to_bytes());
-        prepend.extend_from_slice(&x_a[..]);
-        prepend.extend_from_slice(&y_a[..]);
+        let (mut x_a, mut y_a) = (x_a.to_bytes(), y_a.to_bytes());
+        prepend.append(&mut x_a);
+        prepend.append(&mut y_a);
+
 
         let mut hasher = Sm3Hash::new(&prepend[..]);
         let z_a = hasher.get_hash();
@@ -132,7 +134,7 @@ impl SigCtx {
 
         let mut prepended_msg: Vec<u8> = Vec::new();
         prepended_msg.extend_from_slice(&z_a[..]);
-        prepended_msg.extend_from_slice(msg);
+        prepended_msg.extend_from_slice(&msg[..]);
 
         let mut hasher = Sm3Hash::new(&prepended_msg[..]);
         hasher.get_hash()
@@ -140,15 +142,23 @@ impl SigCtx {
 
     pub fn sign(&self, msg: &[u8], sk: &BigUint, pk: &Point) -> Signature
     {
+        // Get the value "e", which is the hash of message and ID, EC parameters and public key
+        let digest = self.hash("1234567812345678", pk, msg);
+
+        self.sign_raw(&digest[..], sk)
+    }
+
+    pub fn sign_raw(&self, digest: &[u8], sk: &BigUint) -> Signature
+    {
         let curve = &self.curve;
         // Get the value "e", which is the hash of message and ID, EC parameters and public key
-        let e = self.hash("1234567812345678", pk, msg);
-        let e = BigUint::from_bytes_be(&e[..]);
+
+        let e = BigUint::from_bytes_be(digest);
 
         // two while loops
         loop {
             // k = rand()
-            // (x_1, y_1) = g^k
+            // (x_1, y_1) = g^kg
             let k = self.curve.random_uint();
             let p_1 = curve.mul(&k, &curve.generator());
             let (x_1, _) = curve.to_affine(&p_1);
@@ -181,6 +191,17 @@ impl SigCtx {
 
     pub fn verify(&self, msg: &[u8], pk: &Point, sig: &Signature) -> bool
     {
+        //Get hash value
+        let digest = self.hash("1234567812345678", pk, msg);
+        println!("digest: {:?}", digest);
+        self.verify_raw(&digest[..], pk, sig)
+
+    }
+
+    pub fn verify_raw(&self, digest: &[u8], pk: &Point, sig: &Signature) -> bool
+    {
+        let e = BigUint::from_bytes_be(digest);
+
         let curve = &self.curve;
         // check r and s
         if sig.r == BigUint::zero() || sig.s == BigUint::zero() {
@@ -189,10 +210,6 @@ impl SigCtx {
         if sig.r >= curve.get_n() || sig.s >= curve.get_n() {
             return false;
         }
-
-        //Get hash value
-        let e = self.hash("1234567812345678", pk, msg);
-        let e = BigUint::from_bytes_be(&e[..]);
 
         // calculate R
         let t = (sig.s.clone() + sig.r.clone()) % curve.get_n();
@@ -316,6 +333,29 @@ mod tests {
 
         let sk_v = ctx.serialize_seckey(&sk);
         let new_sk = ctx.load_seckey(&sk_v[..]).unwrap();
-        assert!(new_sk == sk);
+        assert_eq!(new_sk, sk);
+    }
+
+    #[test]
+    fn test_gmssl()
+    {
+        let msg = "abc";
+
+        let pk: &[u8] = &[4, 74, 96, 47, 163, 99, 77, 222, 236, 237, 71, 125, 218, 161, 229, 246, 228, 192, 42,
+            104, 234, 126, 248, 66, 213, 229, 197, 240, 217, 189, 63, 129, 200, 87, 182, 18, 147, 247, 228,
+            50, 153, 131, 195, 134, 229, 170, 169, 156, 40, 17, 181, 174, 114, 75, 207, 124, 34, 167, 115,
+            107, 237, 208, 148, 190, 57];
+
+        let sig: &[u8] = &[48, 69, 2, 33, 0, 193, 39, 212, 158, 175, 81, 172, 84, 159, 245, 23, 3,
+            123, 144, 111, 58, 145, 67, 200, 250, 113, 127, 180, 235, 124, 112, 120, 143, 164, 8,
+            114, 105, 2, 32, 79, 208, 246, 149, 207, 210, 75, 65, 215, 190, 236, 148, 228, 128,
+            200, 146, 183, 52, 17, 129, 44, 36, 151, 15, 157, 56, 130, 1, 151, 27, 141, 34];
+
+
+        let ctx = SigCtx::new();
+        let pk = ctx.load_pubkey(pk).unwrap();
+
+        let sig = Signature::der_decode(sig).unwrap();
+        assert!(ctx.verify(&msg.as_bytes(), &pk, &sig));
     }
 }
