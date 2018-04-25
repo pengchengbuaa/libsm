@@ -204,18 +204,13 @@ mod tests {
     #[test]
     fn lets_hash_1() {
         let string = String::from("abc");
-        //let string = String::from("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
+        //let string = String::from("abcd");
 
         let s=string.as_bytes();
 
         let mut sm3 = Sm3Hash::new(s);
 
         let hash = sm3.get_hash();
-
-//        for i in hash.iter() {
-//            print!("{:x} ", i);
-//        }
-//        println!();
 
         let standrad_hash: [u8; 32] = [
             0x66, 0xc7, 0xf0, 0xf4, 0x62, 0xee, 0xed, 0xd9,
