@@ -70,7 +70,7 @@ impl Signature {
         return Ok(Signature {
             r,
             s,
-        })
+        });
     }
 
     pub fn der_encode(&self) -> Vec<u8>
@@ -102,10 +102,10 @@ impl SigCtx {
         let curve = &self.curve;
 
         let mut prepend: Vec<u8> = Vec::new();
-        if id.len() > 65535 {
+        if id.len() * 8 > 65535 {
             panic!("ID is too long.");
         }
-        prepend.write_u16::<BigEndian>(id.len() as u16).unwrap();
+        prepend.write_u16::<BigEndian>((id.len() * 8) as u16).unwrap();
         for c in id.bytes() { prepend.push(c); }
 
         let mut a = curve.get_a();
@@ -193,9 +193,8 @@ impl SigCtx {
     {
         //Get hash value
         let digest = self.hash("1234567812345678", pk, msg);
-        println!("digest: {:?}", digest);
+        //println!("digest: {:?}", digest);
         self.verify_raw(&digest[..], pk, sig)
-
     }
 
     pub fn verify_raw(&self, digest: &[u8], pk: &Point, sig: &Signature) -> bool
@@ -339,23 +338,25 @@ mod tests {
     #[test]
     fn test_gmssl()
     {
-        let msg = "abc";
+        let msg = String::from("abc");
+        let msg: &[u8] = &[
+            0x66, 0xc7, 0xf0, 0xf4, 0x62, 0xee, 0xed, 0xd9,
+            0xd1, 0xf2, 0xd4, 0x6b, 0xdc, 0x10, 0xe4, 0xe2,
+            0x41, 0x67, 0xc4, 0x87, 0x5c, 0xf2, 0xf7, 0xa2,
+            0x29, 0x7d, 0xa0, 0x2b, 0x8f, 0x4b, 0xa8, 0xe0
+        ];
 
-        let pk: &[u8] = &[4, 74, 96, 47, 163, 99, 77, 222, 236, 237, 71, 125, 218, 161, 229, 246, 228, 192, 42,
-            104, 234, 126, 248, 66, 213, 229, 197, 240, 217, 189, 63, 129, 200, 87, 182, 18, 147, 247, 228,
-            50, 153, 131, 195, 134, 229, 170, 169, 156, 40, 17, 181, 174, 114, 75, 207, 124, 34, 167, 115,
-            107, 237, 208, 148, 190, 57];
+        let pk: &[u8] = &[4, 233, 185, 71, 125, 111, 174, 63, 105, 217, 19, 218, 72, 114, 185, 96, 243, 176, 1, 8, 239, 132, 114, 119, 216, 38, 21, 117, 142, 223, 42, 157, 170, 123, 219, 65, 50, 238, 191, 116, 238, 240, 197, 158, 1, 145, 177, 107, 112, 91, 101, 86, 50, 204, 218, 254, 172, 2, 250, 33, 56, 176, 121, 16, 215];
 
-        let sig: &[u8] = &[48, 69, 2, 33, 0, 193, 39, 212, 158, 175, 81, 172, 84, 159, 245, 23, 3,
-            123, 144, 111, 58, 145, 67, 200, 250, 113, 127, 180, 235, 124, 112, 120, 143, 164, 8,
-            114, 105, 2, 32, 79, 208, 246, 149, 207, 210, 75, 65, 215, 190, 236, 148, 228, 128,
-            200, 146, 183, 52, 17, 129, 44, 36, 151, 15, 157, 56, 130, 1, 151, 27, 141, 34];
+        let sig: &[u8] = &[48, 69, 2, 33, 0, 171, 111, 172, 181, 242, 159, 198, 106, 33, 229, 104, 147, 245, 97, 132, 141, 141, 17, 27, 97, 156, 159, 160, 188, 239, 78, 124, 17, 211, 124, 113, 26, 2, 32, 53, 21, 4, 195, 198, 42, 71, 17, 110, 157, 113, 185, 178, 74, 147, 87, 129, 179, 168, 163, 171, 126, 39, 156, 198, 29, 163, 199, 82, 25, 13, 112];
 
-
+        let curve = EccCtx::new();
         let ctx = SigCtx::new();
-        let pk = ctx.load_pubkey(pk).unwrap();
 
-        let sig = Signature::der_decode(sig).unwrap();
-        assert!(ctx.verify(&msg.as_bytes(), &pk, &sig));
+        let pk = curve.bytes_to_point(&pk).unwrap();
+
+        let sig = Signature::der_decode(&sig).unwrap();
+
+        assert!(ctx.verify_raw(msg, &pk, &sig));
     }
 }
