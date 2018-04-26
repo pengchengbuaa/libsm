@@ -3,6 +3,13 @@ name = "libsm"
 version = "0.1.0"
 authors = ["Nebula Moe <nebula_moe@outlook.com>", "Itachi666"]
 
+description = "A Rust Library of China's Standards of Encryption Algorithms (SM2/3/4)"
+homepage = "https://github.com/NebulaMoe/libsm"
+repository = "https://github.com/NebulaMoe/libsm"
+readme = "README.md"
+keywords = ["cipher", "cryptography"]
+license = "GPL-3.0"
+
 [dependencies]
 rand = "0.4"
 byteorder = "1"
