@@ -25,6 +25,9 @@ use yasna;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
+pub type Pubkey = super::ecc::Point;
+pub type Seckey = BigUint;
+
 pub struct Signature {
     r: BigUint,
     s: BigUint,
@@ -254,6 +257,17 @@ impl SigCtx {
         return (pk, sk);
     }
 
+    pub fn pk_from_sk(&self, sk: &BigUint) -> Point
+    {
+        let curve = &self.curve;
+        if sk >= &curve.n || sk == &BigUint::zero(){
+            panic!("invalid seckey");
+        }
+        let pk = curve.mul(&sk, &curve.generator());
+
+        return pk;
+    }
+
     pub fn load_pubkey(&self, buf: &[u8]) -> Result<Point, bool>
     {
         self.curve.bytes_to_point(buf)
@@ -341,7 +355,6 @@ mod tests {
     #[test]
     fn test_gmssl()
     {
-        let msg = String::from("abc");
         let msg: &[u8] = &[
             0x66, 0xc7, 0xf0, 0xf4, 0x62, 0xee, 0xed, 0xd9,
             0xd1, 0xf2, 0xd4, 0x6b, 0xdc, 0x10, 0xe4, 0xe2,
