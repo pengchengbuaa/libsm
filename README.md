@@ -2,6 +2,6 @@
 
 This is a Rust library of China's Standards of Encryption Algorithms.
 
-[Documentation(中文)](https://nebulamoe.github.io/libsm/)
+[Documentation(中文)](http://tech.nebula.moe/files/libsm_doc/en)
 
-[Documentation(English)](https://nebulamoe.github.io/libsm/en/)
+[Documentation(English)](http://tech.nebula.moe/files/libsm_doc/zh)
