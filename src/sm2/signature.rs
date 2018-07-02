@@ -312,8 +312,8 @@ mod tests {
 
         let ctx = SigCtx::new();
         let (pk, sk) = ctx.new_keypair();
-
         let signature = ctx.sign(msg, &sk, &pk);
+
         assert!(ctx.verify(msg, &pk, &signature));
     }
 

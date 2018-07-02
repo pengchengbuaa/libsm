@@ -330,23 +330,25 @@ impl EccCtx {
 
         let k = FieldElem::from_biguint(&m);
 
-        let mut q0 = self.zero();
-        let mut q1 = p.clone();
+        let mut q = self.zero();
 
-        for i in 0..256 {
+        let mut i = 0;
+        while i < 256 {
             let index = i as usize / 32;
             let bit = 31 - i as usize % 32;
 
-            let sum = self.add(&q0, &q1);
-            if (k.get_value(index) >> bit) & 0x01 == 0 {
-                q1 = sum;
-                q0 = self.double(&q0);
-            } else {
-                q0 = sum;
-                q1 = self.double(&q1);
+            // let sum = self.add(&q0, &q1);
+            q = self.double(&q);
+
+            if (k.get_value(index) >> bit) & 0x01 != 0 {
+                q = self.add(&q, &p);
+
+                // q = self.double(&q0);
             }
+            
+            i = i + 1;
         }
-        q0
+        q
     }
 
     pub fn eq(&self, p1: &Point, p2: &Point) -> bool

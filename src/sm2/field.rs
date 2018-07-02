@@ -76,8 +76,12 @@ impl FieldCtx {
     {
         let mut s: [FieldElem; 10] = [FieldElem::zero(); 10];
         let mut x: [u32; 16] = [0; 16];
-        for i in 0..16 {
+
+        let mut i = 0;
+        while i < 16 {
             x[i] = input[15 - i];
+            
+            i = i + 1;
         }
 
         s[0] = FieldElem::new([
@@ -114,20 +118,20 @@ impl FieldCtx {
         let mut carry: i32 = 0;
         let mut sum = FieldElem::zero();
 
-        for i in 1..5 {
-            let (t, c) = raw_add(&sum, &s[i]);
-            sum = t;
-            carry = carry + c as i32;
-        }
+        let (t, c) = raw_add(&sum, &s[1]);sum = t;carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[2]);sum = t;carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[3]);sum = t;carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[4]);sum = t;carry = carry + c as i32;
+
         let (t, c) = raw_add(&sum, &sum);
         sum = t;
         carry = carry * 2 + c as i32;
 
-        for i in 5..10 {
-            let (t, c) = raw_add(&sum, &s[i]);
-            sum = t;
-            carry = carry + c as i32;
-        }
+        let (t, c) = raw_add(&sum, &s[5]); sum = t; carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[6]); sum = t; carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[7]); sum = t; carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[8]); sum = t; carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[9]); sum = t; carry = carry + c as i32;
 
         let mut part3 = FieldElem::zero();
         let t: u64 = x[8] as u64 + x[9] as u64 + x[13] as u64 + x[14] as u64;
@@ -224,7 +228,8 @@ impl FieldCtx {
         let mut q0 = FieldElem::from_num(1);
         let mut q1 = x.clone();
 
-        for i in 0..256 {
+        let mut i = 0;
+        while i < 256 {
             let index = i as usize / 32;
             let bit = 31 - i as usize % 32;
 
@@ -236,6 +241,8 @@ impl FieldCtx {
                 q0 = sum;
                 q1 = self.square(&q1);
             }
+
+            i = i + 1;
         }
         q0
     }
@@ -267,12 +274,39 @@ fn raw_add(a: &FieldElem, b: &FieldElem) -> (FieldElem, u32)
 {
     let mut sum = FieldElem::zero();
     let mut carry: u32 = 0;
-    for i in 0..8 {
-        let i = 7 - i;
-        let t_sum: u64 = a.value[i] as u64 + b.value[i] as u64 + carry as u64;
-        sum.value[i] = (t_sum & 0xffffffff) as u32;
-        carry = (t_sum >> 32) as u32;
-    }
+
+    let t_sum: u64 = a.value[7] as u64 + b.value[7] as u64 + carry as u64;
+    sum.value[7] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[6] as u64 + b.value[6] as u64 + carry as u64;
+    sum.value[6] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[5] as u64 + b.value[5] as u64 + carry as u64;
+    sum.value[5] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[4] as u64 + b.value[4] as u64 + carry as u64;
+    sum.value[4] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[3] as u64 + b.value[3] as u64 + carry as u64;
+    sum.value[3] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[2] as u64 + b.value[2] as u64 + carry as u64;
+    sum.value[2] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[1] as u64 + b.value[1] as u64 + carry as u64;
+    sum.value[1] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+    
+    let t_sum: u64 = a.value[0] as u64 + b.value[0] as u64 + carry as u64;
+    sum.value[0] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
     (sum, carry)
 }
 
@@ -280,8 +314,9 @@ fn raw_sub(a: &FieldElem, b: &FieldElem) -> (FieldElem, u32)
 {
     let mut sum = FieldElem::new([0; 8]);
     let mut borrow: u32 = 0;
-    for i in 0..8 {
-        let i = 7 - i;
+    let mut j = 0;
+    while j < 8 {
+        let i = 7 - j;
         let t_sum: i64 = a.value[i] as i64 - b.value[i] as i64 - borrow as i64;
         if t_sum < 0 {
             sum.value[i] = (t_sum + (1 << 32)) as u32;
@@ -290,8 +325,19 @@ fn raw_sub(a: &FieldElem, b: &FieldElem) -> (FieldElem, u32)
             sum.value[i] = t_sum as u32;
             borrow = 0;
         }
+        j = j + 1;
     }
     (sum, borrow)
+}
+
+#[inline(always)]
+fn u32_mul(a: u32, b: u32) -> (u64, u64)
+{ 
+    let uv = a as u64 * b as u64;
+    let u = uv >> 32;
+    let v = uv & 0xffffffff;
+    (u, v)
+
 }
 
 fn raw_mul(a: &FieldElem, b: &FieldElem) -> [u32; 16]
@@ -300,27 +346,25 @@ fn raw_mul(a: &FieldElem, b: &FieldElem) -> [u32; 16]
     let mut carry: u64 = 0;
     let mut ret: [u32; 16] = [0; 16];
 
-    let mut uv: u64;
-
-    for k in 0..15 {
+    let mut k = 0;
+    while k < 15 {
         let index = 15 - k;
-        for i in 0..8 {
+        let mut i = 0;
+        while i < 8 {
             if i > k {
                 break;
             }
             let j = k - i;
             if j < 8 {
-                uv = a.value[7 - i] as u64 * b.value[7 - j] as u64;
-                local += uv & 0xffffffff;
-                carry += uv >> 32;
+                let (u, v) = u32_mul(a.value[7-i], b.value[7-j]);local += v; carry += u;
             }
-        }
-        carry += local >> 32;
-        local = local & 0xffffffff;
 
-        ret[index] = local as u32;
-        local = carry;
-        carry = 0;
+            i = i + 1;
+        }
+        carry += local >> 32;local = local & 0xffffffff;
+        ret[index] = local as u32;local = carry;carry = 0;
+
+        k = k + 1;
     }
     ret[0] = local as u32;
     ret
@@ -337,9 +381,14 @@ impl FieldElem {
     pub fn from_slice(x: &[u32]) -> FieldElem
     {
         let mut arr: [u32; 8] = [0; 8];
-        for i in 0..8 {
-            arr[i] = x[i];
-        }
+        arr[0] = x[0];
+        arr[1] = x[1];
+        arr[2] = x[2];
+        arr[3] = x[3];
+        arr[4] = x[4];
+        arr[5] = x[5];
+        arr[6] = x[6];
+        arr[7] = x[7];
         FieldElem::new(arr)
     }
 
@@ -350,22 +399,28 @@ impl FieldElem {
     // self >= x
     pub fn ge(&self, x: &FieldElem) -> bool
     {
-        for i in 0..8 {
+        let mut i = 0;
+        while i < 8 {
             if self.value[i] < x.value[i] {
                 return false;
             } else if self.value[i] > x.value[i] {
                 return true;
             }
+
+            i = i + 1;
         }
         return true;
     }
 
     pub fn eq(&self, x: &FieldElem) -> bool
     {
-        for i in 0..8 {
+        let mut i = 0;
+        while i < 8 {
             if self.value[i] != x.value[i] {
                 return false;
             }
+
+            i = i + 1;
         }
         return true;
     }
@@ -374,9 +429,13 @@ impl FieldElem {
     {
         let mut ret = FieldElem::zero();
         let mut carry = carry;
-        for i in 0..8 {
+
+        let mut i = 0;
+        while i < 8 {
             ret.value[i] = (carry << 31) + (self.value[i] >> 1);
             carry = self.value[i] & 0x01;
+
+            i = i + 1;
         }
         ret
     }
