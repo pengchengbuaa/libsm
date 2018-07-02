@@ -4,6 +4,7 @@ version = "0.2.0"
 authors = ["Nebula Moe <nebula_moe@outlook.com>", "Itachi <494521900@qq.com>"]
 
 description = "A Rust Library of China's Standards of Encryption Algorithms (SM2/3/4)"
+documentation = "https://blog.nebula.moe/files/libsm_doc/en"
 homepage = "https://github.com/NebulaMoe/libsm"
 repository = "https://github.com/NebulaMoe/libsm"
 readme = "README.md"
