@@ -1,6 +1,6 @@
 [package]
 name = "libsm"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Nebula Moe <nebula_moe@outlook.com>", "Itachi <494521900@qq.com>"]
 
 description = "A Rust Library of China's Standards of Encryption Algorithms (SM2/3/4)"
