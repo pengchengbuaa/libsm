@@ -17,11 +17,10 @@
 
 // Implementation of the prime field(SCA-256) used by SM2
 
-
-use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
-use std::io::Cursor;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use num_bigint::BigUint;
 use num_traits::Num;
+use std::io::Cursor;
 
 pub struct FieldCtx {
     modulus: FieldElem,
@@ -29,25 +28,22 @@ pub struct FieldCtx {
 }
 
 impl FieldCtx {
-    pub fn new() -> FieldCtx
-    {
+    pub fn new() -> FieldCtx {
         // p = FFFFFFFE FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF 00000000 FFFFFFFF FFFFFFFF
         //   = 2^256 - 2^224 - 2^96 + 2^64 -1
         let modulus = FieldElem::new([
-            0xfffffffe, 0xffffffff, 0xffffffff, 0xffffffff,
-            0xffffffff, 0x00000000, 0xffffffff, 0xffffffff
+            0xfffffffe, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0x00000000, 0xffffffff,
+            0xffffffff,
         ]);
 
-        let (modulus_complete, _borrow) =
-            raw_sub(&FieldElem::zero(), &modulus);
+        let (modulus_complete, _borrow) = raw_sub(&FieldElem::zero(), &modulus);
         FieldCtx {
             modulus,
             modulus_complete,
         }
     }
 
-    pub fn add(&self, a: &FieldElem, b: &FieldElem) -> FieldElem
-    {
+    pub fn add(&self, a: &FieldElem, b: &FieldElem) -> FieldElem {
         let (raw_sum, carry) = raw_add(a, b);
         if carry == 1 || raw_sum.ge(&self.modulus) {
             let (sum, _borrow) = raw_sub(&raw_sum, &self.modulus);
@@ -57,8 +53,7 @@ impl FieldCtx {
         }
     }
 
-    pub fn sub(&self, a: &FieldElem, b: &FieldElem) -> FieldElem
-    {
+    pub fn sub(&self, a: &FieldElem, b: &FieldElem) -> FieldElem {
         let (raw_diff, borrow) = raw_sub(a, b);
         if borrow == 1 {
             let (diff, _borrow) = raw_sub(&raw_diff, &self.modulus_complete);
@@ -72,62 +67,63 @@ impl FieldCtx {
     // Reference:
     // http://ieeexplore.ieee.org/document/7285166/ for details
     #[inline]
-    fn fast_reduction(&self, input: &[u32; 16]) -> FieldElem
-    {
+    fn fast_reduction(&self, input: &[u32; 16]) -> FieldElem {
         let mut s: [FieldElem; 10] = [FieldElem::zero(); 10];
         let mut x: [u32; 16] = [0; 16];
-        for i in 0..16 {
+
+        let mut i = 0;
+        while i < 16 {
             x[i] = input[15 - i];
+
+            i = i + 1;
         }
 
-        s[0] = FieldElem::new([
-            x[7], x[6], x[5], x[4], x[3], x[2], x[1], x[0]
-        ]);
-        s[1] = FieldElem::new([
-            x[15], 0, 0, 0, 0, 0, x[15], x[14]
-        ]);
-        s[2] = FieldElem::new([
-            x[14], 0, 0, 0, 0, 0, x[14], x[13]
-        ]);
-        s[3] = FieldElem::new([
-            x[13], 0, 0, 0, 0, 0, 0, 0
-        ]);
-        s[4] = FieldElem::new([
-            x[12], 0, x[15], x[14], x[13], 0, 0, x[15]
-        ]);
-        s[5] = FieldElem::new([
-            x[15], x[15], x[14], x[13], x[12], 0, x[11], x[10]
-        ]);
-        s[6] = FieldElem::new([
-            x[11], x[14], x[13], x[12], x[11], 0, x[10], x[9]
-        ]);
-        s[7] = FieldElem::new([
-            x[10], x[11], x[10], x[9], x[8], 0, x[13], x[12]
-        ]);
-        s[8] = FieldElem::new([
-            x[9], 0, 0, x[15], x[14], 0, x[9], x[8]
-        ]);
-        s[9] = FieldElem::new([
-            x[8], 0, 0, 0, x[15], 0, x[12], x[11]
-        ]);
+        s[0] = FieldElem::new([x[7], x[6], x[5], x[4], x[3], x[2], x[1], x[0]]);
+        s[1] = FieldElem::new([x[15], 0, 0, 0, 0, 0, x[15], x[14]]);
+        s[2] = FieldElem::new([x[14], 0, 0, 0, 0, 0, x[14], x[13]]);
+        s[3] = FieldElem::new([x[13], 0, 0, 0, 0, 0, 0, 0]);
+        s[4] = FieldElem::new([x[12], 0, x[15], x[14], x[13], 0, 0, x[15]]);
+        s[5] = FieldElem::new([x[15], x[15], x[14], x[13], x[12], 0, x[11], x[10]]);
+        s[6] = FieldElem::new([x[11], x[14], x[13], x[12], x[11], 0, x[10], x[9]]);
+        s[7] = FieldElem::new([x[10], x[11], x[10], x[9], x[8], 0, x[13], x[12]]);
+        s[8] = FieldElem::new([x[9], 0, 0, x[15], x[14], 0, x[9], x[8]]);
+        s[9] = FieldElem::new([x[8], 0, 0, 0, x[15], 0, x[12], x[11]]);
 
         let mut carry: i32 = 0;
         let mut sum = FieldElem::zero();
 
-        for i in 1..5 {
-            let (t, c) = raw_add(&sum, &s[i]);
-            sum = t;
-            carry = carry + c as i32;
-        }
+        let (t, c) = raw_add(&sum, &s[1]);
+        sum = t;
+        carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[2]);
+        sum = t;
+        carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[3]);
+        sum = t;
+        carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[4]);
+        sum = t;
+        carry = carry + c as i32;
+
         let (t, c) = raw_add(&sum, &sum);
         sum = t;
         carry = carry * 2 + c as i32;
 
-        for i in 5..10 {
-            let (t, c) = raw_add(&sum, &s[i]);
-            sum = t;
-            carry = carry + c as i32;
-        }
+        let (t, c) = raw_add(&sum, &s[5]);
+        sum = t;
+        carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[6]);
+        sum = t;
+        carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[7]);
+        sum = t;
+        carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[8]);
+        sum = t;
+        carry = carry + c as i32;
+        let (t, c) = raw_add(&sum, &s[9]);
+        sum = t;
+        carry = carry + c as i32;
 
         let mut part3 = FieldElem::zero();
         let t: u64 = x[8] as u64 + x[9] as u64 + x[13] as u64 + x[14] as u64;
@@ -150,9 +146,7 @@ impl FieldCtx {
         sum
     }
 
-
-    pub fn mul(&self, a: &FieldElem, b: &FieldElem) -> FieldElem
-    {
+    pub fn mul(&self, a: &FieldElem, b: &FieldElem) -> FieldElem {
         let raw_prod = raw_mul(a, b);
         self.fast_reduction(&raw_prod)
     }
@@ -170,8 +164,7 @@ impl FieldCtx {
     // Extended Eulidean Algorithm(EEA) to calculate x^(-1) mod p
     // Reference:
     // http://delta.cs.cinvestav.mx/~francisco/arith/julio.pdf
-    pub fn inv(&self, x: &FieldElem) -> FieldElem
-    {
+    pub fn inv(&self, x: &FieldElem) -> FieldElem {
         if x.eq(&FieldElem::zero()) {
             panic!("zero has no inversion in filed");
         }
@@ -217,14 +210,14 @@ impl FieldCtx {
         self.sub(&self.modulus, x)
     }
 
-    fn exp(&self, x: &FieldElem, n: &BigUint) -> FieldElem
-    {
+    fn exp(&self, x: &FieldElem, n: &BigUint) -> FieldElem {
         let u = FieldElem::from_biguint(n);
 
         let mut q0 = FieldElem::from_num(1);
         let mut q1 = x.clone();
 
-        for i in 0..256 {
+        let mut i = 0;
+        while i < 256 {
             let index = i as usize / 32;
             let bit = 31 - i as usize % 32;
 
@@ -236,13 +229,14 @@ impl FieldCtx {
                 q0 = sum;
                 q1 = self.square(&q1);
             }
+
+            i = i + 1;
         }
         q0
     }
 
     // Square root of a field element
-    pub fn sqrt(&self, g: &FieldElem) -> Result<FieldElem, bool>
-    {
+    pub fn sqrt(&self, g: &FieldElem) -> Result<FieldElem, bool> {
         // p = 4 * u + 3
         // u = u + 1
         let u = BigUint::from_str_radix(
@@ -251,7 +245,7 @@ impl FieldCtx {
         ).unwrap();
 
         let y = self.exp(g, &u);
-        if self.square(&y).eq(g){
+        if self.square(&y).eq(g) {
             return Ok(y);
         }
         return Err(true);
@@ -260,28 +254,54 @@ impl FieldCtx {
 
 #[derive(Copy, Clone)]
 pub struct FieldElem {
-    value: [u32; 8]
+    pub value: [u32; 8],
 }
 
-fn raw_add(a: &FieldElem, b: &FieldElem) -> (FieldElem, u32)
-{
+fn raw_add(a: &FieldElem, b: &FieldElem) -> (FieldElem, u32) {
     let mut sum = FieldElem::zero();
     let mut carry: u32 = 0;
-    for i in 0..8 {
-        let i = 7 - i;
-        let t_sum: u64 = a.value[i] as u64 + b.value[i] as u64 + carry as u64;
-        sum.value[i] = (t_sum & 0xffffffff) as u32;
-        carry = (t_sum >> 32) as u32;
-    }
+
+    let t_sum: u64 = a.value[7] as u64 + b.value[7] as u64 + carry as u64;
+    sum.value[7] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[6] as u64 + b.value[6] as u64 + carry as u64;
+    sum.value[6] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[5] as u64 + b.value[5] as u64 + carry as u64;
+    sum.value[5] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[4] as u64 + b.value[4] as u64 + carry as u64;
+    sum.value[4] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[3] as u64 + b.value[3] as u64 + carry as u64;
+    sum.value[3] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[2] as u64 + b.value[2] as u64 + carry as u64;
+    sum.value[2] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[1] as u64 + b.value[1] as u64 + carry as u64;
+    sum.value[1] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
+    let t_sum: u64 = a.value[0] as u64 + b.value[0] as u64 + carry as u64;
+    sum.value[0] = (t_sum & 0xffffffff) as u32;
+    carry = (t_sum >> 32) as u32;
+
     (sum, carry)
 }
 
-fn raw_sub(a: &FieldElem, b: &FieldElem) -> (FieldElem, u32)
-{
+fn raw_sub(a: &FieldElem, b: &FieldElem) -> (FieldElem, u32) {
     let mut sum = FieldElem::new([0; 8]);
     let mut borrow: u32 = 0;
-    for i in 0..8 {
-        let i = 7 - i;
+    let mut j = 0;
+    while j < 8 {
+        let i = 7 - j;
         let t_sum: i64 = a.value[i] as i64 - b.value[i] as i64 - borrow as i64;
         if t_sum < 0 {
             sum.value[i] = (t_sum + (1 << 32)) as u32;
@@ -290,56 +310,68 @@ fn raw_sub(a: &FieldElem, b: &FieldElem) -> (FieldElem, u32)
             sum.value[i] = t_sum as u32;
             borrow = 0;
         }
+        j = j + 1;
     }
     (sum, borrow)
 }
 
-fn raw_mul(a: &FieldElem, b: &FieldElem) -> [u32; 16]
-{
+#[inline(always)]
+fn u32_mul(a: u32, b: u32) -> (u64, u64) {
+    let uv = a as u64 * b as u64;
+    let u = uv >> 32;
+    let v = uv & 0xffffffff;
+    (u, v)
+}
+
+fn raw_mul(a: &FieldElem, b: &FieldElem) -> [u32; 16] {
     let mut local: u64 = 0;
     let mut carry: u64 = 0;
     let mut ret: [u32; 16] = [0; 16];
 
-    let mut uv: u64;
-
-    for k in 0..15 {
+    let mut k = 0;
+    while k < 15 {
         let index = 15 - k;
-        for i in 0..8 {
+        let mut i = 0;
+        while i < 8 {
             if i > k {
                 break;
             }
             let j = k - i;
             if j < 8 {
-                uv = a.value[7 - i] as u64 * b.value[7 - j] as u64;
-                local += uv & 0xffffffff;
-                carry += uv >> 32;
+                let (u, v) = u32_mul(a.value[7 - i], b.value[7 - j]);
+                local += v;
+                carry += u;
             }
+
+            i = i + 1;
         }
         carry += local >> 32;
         local = local & 0xffffffff;
-
         ret[index] = local as u32;
         local = carry;
         carry = 0;
+
+        k = k + 1;
     }
     ret[0] = local as u32;
     ret
 }
 
 impl FieldElem {
-    pub fn new(x: [u32; 8]) -> FieldElem
-    {
-        FieldElem {
-            value: x
-        }
+    pub fn new(x: [u32; 8]) -> FieldElem {
+        FieldElem { value: x }
     }
 
-    pub fn from_slice(x: &[u32]) -> FieldElem
-    {
+    pub fn from_slice(x: &[u32]) -> FieldElem {
         let mut arr: [u32; 8] = [0; 8];
-        for i in 0..8 {
-            arr[i] = x[i];
-        }
+        arr[0] = x[0];
+        arr[1] = x[1];
+        arr[2] = x[2];
+        arr[3] = x[3];
+        arr[4] = x[4];
+        arr[5] = x[5];
+        arr[6] = x[6];
+        arr[7] = x[7];
         FieldElem::new(arr)
     }
 
@@ -348,41 +380,47 @@ impl FieldElem {
     }
 
     // self >= x
-    pub fn ge(&self, x: &FieldElem) -> bool
-    {
-        for i in 0..8 {
+    pub fn ge(&self, x: &FieldElem) -> bool {
+        let mut i = 0;
+        while i < 8 {
             if self.value[i] < x.value[i] {
                 return false;
             } else if self.value[i] > x.value[i] {
                 return true;
             }
+
+            i = i + 1;
         }
         return true;
     }
 
-    pub fn eq(&self, x: &FieldElem) -> bool
-    {
-        for i in 0..8 {
+    pub fn eq(&self, x: &FieldElem) -> bool {
+        let mut i = 0;
+        while i < 8 {
             if self.value[i] != x.value[i] {
                 return false;
             }
+
+            i = i + 1;
         }
         return true;
     }
 
-    pub fn div2(&self, carry: u32) -> FieldElem
-    {
+    pub fn div2(&self, carry: u32) -> FieldElem {
         let mut ret = FieldElem::zero();
         let mut carry = carry;
-        for i in 0..8 {
+
+        let mut i = 0;
+        while i < 8 {
             ret.value[i] = (carry << 31) + (self.value[i] >> 1);
             carry = self.value[i] & 0x01;
+
+            i = i + 1;
         }
         ret
     }
 
-    pub fn is_even(&self) -> bool
-    {
+    pub fn is_even(&self) -> bool {
         let x = self.value[7] & 0x01;
         if x == 0 {
             return true;
@@ -391,18 +429,15 @@ impl FieldElem {
         }
     }
 
-
     // Conversions
-    pub fn to_bytes(&self) -> Vec<u8>
-    {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut ret: Vec<u8> = Vec::new();
         for i in 0..8 {
             ret.write_u32::<BigEndian>(self.value[i]).unwrap();
         }
         ret
     }
-    pub fn from_bytes(x: &[u8]) -> FieldElem
-    {
+    pub fn from_bytes(x: &[u8]) -> FieldElem {
         if x.len() != 32 {
             panic!("a SCA-256 field element must be 32-byte long");
         }
@@ -415,14 +450,12 @@ impl FieldElem {
         elem
     }
 
-    pub fn to_biguint(&self) -> BigUint
-    {
+    pub fn to_biguint(&self) -> BigUint {
         let v = self.to_bytes();
         BigUint::from_bytes_be(&v[..])
     }
 
-    pub fn from_biguint(bi: &BigUint) -> FieldElem
-    {
+    pub fn from_biguint(bi: &BigUint) -> FieldElem {
         let v = bi.to_bytes_be();
         let mut num_v: Vec<u8> = Vec::new();
         let padding = 32 - v.len();
@@ -435,8 +468,7 @@ impl FieldElem {
         FieldElem::from_bytes(&num_v[..])
     }
 
-    pub fn from_num(x: u64) -> FieldElem
-    {
+    pub fn from_num(x: u64) -> FieldElem {
         let mut arr: [u32; 8] = [0; 8];
         arr[7] = (x & 0xffffffff) as u32;
         arr[6] = (x >> 32) as u32;
@@ -444,13 +476,12 @@ impl FieldElem {
         FieldElem::new(arr)
     }
 
-    pub fn to_str(&self, radix: u32) -> String
-    {
+    pub fn to_str(&self, radix: u32) -> String {
         let b = self.to_biguint();
         b.to_str_radix(radix)
     }
 
-    pub fn get_value(&self, i:usize) -> u32{
+    pub fn get_value(&self, i: usize) -> u32 {
         self.value[i]
     }
 }
@@ -463,8 +494,7 @@ mod tests {
     use rand::Rng;
 
     #[test]
-    fn test_add()
-    {
+    fn test_add() {
         let ctx = FieldCtx::new();
 
         let a = FieldElem::from_num(1);
@@ -478,8 +508,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sub()
-    {
+    fn test_sub() {
         let ctx = FieldCtx::new();
 
         let a = FieldElem::from_num(0xffffffff);
@@ -487,8 +516,7 @@ mod tests {
         assert!(a.eq(&a1));
     }
 
-    fn rand_elem() -> FieldElem
-    {
+    fn rand_elem() -> FieldElem {
         let mut rng = OsRng::new().unwrap();
         let mut buf: [u32; 8] = [0; 8];
         for i in 0..8 {
@@ -505,8 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn add_sub_rand_test()
-    {
+    fn add_sub_rand_test() {
         let ctx = FieldCtx::new();
 
         for _i in 0..20 {
@@ -520,8 +547,7 @@ mod tests {
 
     // test multiplilcations
     #[test]
-    fn test_mul()
-    {
+    fn test_mul() {
         let ctx = FieldCtx::new();
         let x = raw_mul(&ctx.modulus, &ctx.modulus);
         let y = ctx.fast_reduction(&x);
@@ -529,15 +555,14 @@ mod tests {
     }
 
     #[test]
-    fn test_div2()
-    {
+    fn test_div2() {
         let x = FieldElem::new([
-            0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
-            0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff
+            0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+            0xffffffff,
         ]);
         let y = FieldElem::new([
-            0x7fffffff, 0xffffffff, 0xffffffff, 0xffffffff,
-            0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff
+            0x7fffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+            0xffffffff,
         ]);
         assert!(y.eq(&x.div2(0)));
         assert!(x.eq(&x.div2(1)));
@@ -546,8 +571,7 @@ mod tests {
     }
 
     #[test]
-    fn test_inv()
-    {
+    fn test_inv() {
         let ctx = FieldCtx::new();
         let one = FieldElem::from_num(1);
 
@@ -561,8 +585,7 @@ mod tests {
     }
 
     #[test]
-    fn test_byte_conversion()
-    {
+    fn test_byte_conversion() {
         for _x in 1..100 {
             let x = rand_elem();
             let y = x.to_bytes();
@@ -573,8 +596,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bigint_conversion()
-    {
+    fn test_bigint_conversion() {
         for _x in 1..100 {
             let x = rand_elem();
             let y = x.to_biguint();
@@ -585,8 +607,7 @@ mod tests {
     }
 
     #[test]
-    fn test_neg()
-    {
+    fn test_neg() {
         let ctx = FieldCtx::new();
         for _ in 0..100 {
             let x = rand_elem();
@@ -597,10 +618,10 @@ mod tests {
     }
 
     #[test]
-    fn test_sqrt(){
+    fn test_sqrt() {
         let ctx = FieldCtx::new();
 
-        for _ in 0..10{
+        for _ in 0..10 {
             let x = rand_elem();
             let x_2 = ctx.square(&x);
             let new_x = ctx.sqrt(&x_2).unwrap();

@@ -15,17 +15,18 @@
 // You should have received a copy of the GNU General Public License
 // along with libsm.  If not, see <http://www.gnu.org/licenses/>.
 
-use num_bigint::BigUint;
 use super::ecc::*;
-use sm3::hash::Sm3Hash;
-use num_traits::*;
 use super::field::FieldElem;
+use num_bigint::BigUint;
+use num_traits::*;
+use sm3::hash::Sm3Hash;
 
 use yasna;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
 pub type Pubkey = super::ecc::Point;
+type Point = super::ecc::Point;
 pub type Seckey = BigUint;
 
 pub struct Signature {
@@ -34,8 +35,7 @@ pub struct Signature {
 }
 
 impl Signature {
-    pub fn der_decode(buf: &[u8]) -> Result<Signature, yasna::ASN1Error>
-    {
+    pub fn der_decode(buf: &[u8]) -> Result<Signature, yasna::ASN1Error> {
         let (r, s) = yasna::parse_der(buf, |reader| {
             reader.read_sequence(|reader| {
                 let r = reader.next().read_biguint()?;
@@ -43,14 +43,10 @@ impl Signature {
                 return Ok((r, s));
             })
         })?;
-        Ok(Signature {
-            r,
-            s,
-        })
+        Ok(Signature { r, s })
     }
 
-    pub fn der_decode_raw(buf: &[u8]) -> Result<Signature, bool>
-    {
+    pub fn der_decode_raw(buf: &[u8]) -> Result<Signature, bool> {
         if buf[0] != 0x02 {
             return Err(true);
         }
@@ -70,14 +66,10 @@ impl Signature {
         }
         let s = BigUint::from_bytes_be(&buf[2..2 + s_len]);
 
-        return Ok(Signature {
-            r,
-            s,
-        });
+        return Ok(Signature { r, s });
     }
 
-    pub fn der_encode(&self) -> Vec<u8>
-    {
+    pub fn der_encode(&self) -> Vec<u8> {
         let der = yasna::construct_der(|writer| {
             writer.write_sequence(|writer| {
                 writer.next().write_biguint(&self.r);
@@ -93,23 +85,25 @@ pub struct SigCtx {
 }
 
 impl SigCtx {
-    pub fn new() -> SigCtx
-    {
+    pub fn new() -> SigCtx {
         SigCtx {
             curve: EccCtx::new(),
         }
     }
 
-    pub fn hash(&self, id: &str, pk: &Point, msg: &[u8]) -> [u8; 32]
-    {
+    pub fn hash(&self, id: &str, pk: &Point, msg: &[u8]) -> [u8; 32] {
         let curve = &self.curve;
 
         let mut prepend: Vec<u8> = Vec::new();
         if id.len() * 8 > 65535 {
             panic!("ID is too long.");
         }
-        prepend.write_u16::<BigEndian>((id.len() * 8) as u16).unwrap();
-        for c in id.bytes() { prepend.push(c); }
+        prepend
+            .write_u16::<BigEndian>((id.len() * 8) as u16)
+            .unwrap();
+        for c in id.bytes() {
+            prepend.push(c);
+        }
 
         let mut a = curve.get_a();
         let mut b = curve.get_b();
@@ -127,7 +121,6 @@ impl SigCtx {
         prepend.append(&mut x_a);
         prepend.append(&mut y_a);
 
-
         let mut hasher = Sm3Hash::new(&prepend[..]);
         let z_a = hasher.get_hash();
 
@@ -143,16 +136,14 @@ impl SigCtx {
         hasher.get_hash()
     }
 
-    pub fn sign(&self, msg: &[u8], sk: &BigUint, pk: &Point) -> Signature
-    {
+    pub fn sign(&self, msg: &[u8], sk: &BigUint, pk: &Point) -> Signature {
         // Get the value "e", which is the hash of message and ID, EC parameters and public key
         let digest = self.hash("1234567812345678", pk, msg);
 
         self.sign_raw(&digest[..], sk)
     }
 
-    pub fn sign_raw(&self, digest: &[u8], sk: &BigUint) -> Signature
-    {
+    pub fn sign_raw(&self, digest: &[u8], sk: &BigUint) -> Signature {
         let curve = &self.curve;
         // Get the value "e", which is the hash of message and ID, EC parameters and public key
 
@@ -163,7 +154,7 @@ impl SigCtx {
             // k = rand()
             // (x_1, y_1) = g^kg
             let k = self.curve.random_uint();
-            let p_1 = curve.mul(&k, &curve.generator());
+            let p_1 = curve.g_mul(&k);
             let (x_1, _) = curve.to_affine(&p_1);
             let x_1 = x_1.to_biguint();
 
@@ -177,7 +168,9 @@ impl SigCtx {
             let s1 = curve.inv_n(&(sk.clone() + BigUint::one()));
 
             let mut s2_1 = r.clone() * sk.clone();
-            if s2_1 < k { s2_1 = s2_1 + curve.get_n(); }
+            if s2_1 < k {
+                s2_1 = s2_1 + curve.get_n();
+            }
             let mut s2 = s2_1 - k;
             s2 = s2 % curve.get_n();
             let s2 = curve.get_n() - s2;
@@ -192,17 +185,15 @@ impl SigCtx {
         }
     }
 
-    pub fn verify(&self, msg: &[u8], pk: &Point, sig: &Signature) -> bool
-    {
+    pub fn verify(&self, msg: &[u8], pk: &Point, sig: &Signature) -> bool {
         //Get hash value
         let digest = self.hash("1234567812345678", pk, msg);
         //println!("digest: {:?}", digest);
         self.verify_raw(&digest[..], pk, sig)
     }
 
-    pub fn verify_raw(&self, digest: &[u8], pk: &Point, sig: &Signature) -> bool
-    {
-        if digest.len() != 32{
+    pub fn verify_raw(&self, digest: &[u8], pk: &Point, sig: &Signature) -> bool {
+        if digest.len() != 32 {
             panic!("the length of digest must be 32-bytes.");
         }
         let e = BigUint::from_bytes_be(digest);
@@ -222,10 +213,7 @@ impl SigCtx {
             return false;
         }
 
-        let p_1 = curve.add(
-            &curve.mul(&sig.s, &curve.generator()),
-            &curve.mul(&t, pk),
-        );
+        let p_1 = curve.add(&curve.g_mul(&sig.s), &curve.mul(&t, pk));
         let (x_1, _) = curve.to_affine(&p_1);
         let x_1 = x_1.to_biguint();
 
@@ -239,28 +227,25 @@ impl SigCtx {
         return false;
     }
 
-    pub fn new_keypair(&self) -> (Point, BigUint)
-    {
+    pub fn new_keypair(&self) -> (Point, BigUint) {
         let curve = &self.curve;
         let mut sk: BigUint = curve.random_uint();
-        let mut pk: Point = curve.mul(&sk, &curve.generator());
+        let mut pk: Point = curve.g_mul(&sk);
 
         loop {
             if !pk.is_zero() {
                 break;
             }
             sk = curve.random_uint();
-            pk = curve.mul(&sk, &curve.generator());
+            pk = curve.g_mul(&sk);
         }
-
 
         return (pk, sk);
     }
 
-    pub fn pk_from_sk(&self, sk: &BigUint) -> Point
-    {
+    pub fn pk_from_sk(&self, sk: &BigUint) -> Point {
         let curve = &self.curve;
-        if sk >= &curve.n || sk == &BigUint::zero(){
+        if sk >= &curve.n || sk == &BigUint::zero() {
             panic!("invalid seckey");
         }
         let pk = curve.mul(&sk, &curve.generator());
@@ -268,18 +253,15 @@ impl SigCtx {
         return pk;
     }
 
-    pub fn load_pubkey(&self, buf: &[u8]) -> Result<Point, bool>
-    {
+    pub fn load_pubkey(&self, buf: &[u8]) -> Result<Point, bool> {
         self.curve.bytes_to_point(buf)
     }
 
-    pub fn serialize_pubkey(&self, p: &Point, compress: bool) -> Vec<u8>
-    {
+    pub fn serialize_pubkey(&self, p: &Point, compress: bool) -> Vec<u8> {
         self.curve.point_to_bytes(p, compress)
     }
 
-    pub fn load_seckey(&self, buf: &[u8]) -> Result<BigUint, bool>
-    {
+    pub fn load_seckey(&self, buf: &[u8]) -> Result<BigUint, bool> {
         if buf.len() != 32 {
             return Err(true);
         }
@@ -290,8 +272,7 @@ impl SigCtx {
         return Ok(sk);
     }
 
-    pub fn serialize_seckey(&self, x: &BigUint) -> Vec<u8>
-    {
+    pub fn serialize_seckey(&self, x: &BigUint) -> Vec<u8> {
         if *x > self.curve.n {
             panic!("invalid secret key");
         }
@@ -305,21 +286,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sign_and_verify()
-    {
+    fn test_sign_and_verify() {
         let string = String::from("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
         let msg = string.as_bytes();
 
         let ctx = SigCtx::new();
         let (pk, sk) = ctx.new_keypair();
-
         let signature = ctx.sign(msg, &sk, &pk);
+
         assert!(ctx.verify(msg, &pk, &signature));
     }
 
     #[test]
-    fn test_sig_encode_and_decode()
-    {
+    fn test_sig_encode_and_decode() {
         let string = String::from("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd");
         let msg = string.as_bytes();
 
@@ -338,8 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn test_key_serialization()
-    {
+    fn test_key_serialization() {
         let ctx = SigCtx::new();
         let (pk, sk) = ctx.new_keypair();
 
@@ -353,18 +331,26 @@ mod tests {
     }
 
     #[test]
-    fn test_gmssl()
-    {
+    fn test_gmssl() {
         let msg: &[u8] = &[
-            0x66, 0xc7, 0xf0, 0xf4, 0x62, 0xee, 0xed, 0xd9,
-            0xd1, 0xf2, 0xd4, 0x6b, 0xdc, 0x10, 0xe4, 0xe2,
-            0x41, 0x67, 0xc4, 0x87, 0x5c, 0xf2, 0xf7, 0xa2,
-            0x29, 0x7d, 0xa0, 0x2b, 0x8f, 0x4b, 0xa8, 0xe0
+            0x66, 0xc7, 0xf0, 0xf4, 0x62, 0xee, 0xed, 0xd9, 0xd1, 0xf2, 0xd4, 0x6b, 0xdc, 0x10,
+            0xe4, 0xe2, 0x41, 0x67, 0xc4, 0x87, 0x5c, 0xf2, 0xf7, 0xa2, 0x29, 0x7d, 0xa0, 0x2b,
+            0x8f, 0x4b, 0xa8, 0xe0,
         ];
 
-        let pk: &[u8] = &[4, 233, 185, 71, 125, 111, 174, 63, 105, 217, 19, 218, 72, 114, 185, 96, 243, 176, 1, 8, 239, 132, 114, 119, 216, 38, 21, 117, 142, 223, 42, 157, 170, 123, 219, 65, 50, 238, 191, 116, 238, 240, 197, 158, 1, 145, 177, 107, 112, 91, 101, 86, 50, 204, 218, 254, 172, 2, 250, 33, 56, 176, 121, 16, 215];
+        let pk: &[u8] = &[
+            4, 233, 185, 71, 125, 111, 174, 63, 105, 217, 19, 218, 72, 114, 185, 96, 243, 176, 1,
+            8, 239, 132, 114, 119, 216, 38, 21, 117, 142, 223, 42, 157, 170, 123, 219, 65, 50, 238,
+            191, 116, 238, 240, 197, 158, 1, 145, 177, 107, 112, 91, 101, 86, 50, 204, 218, 254,
+            172, 2, 250, 33, 56, 176, 121, 16, 215,
+        ];
 
-        let sig: &[u8] = &[48, 69, 2, 33, 0, 171, 111, 172, 181, 242, 159, 198, 106, 33, 229, 104, 147, 245, 97, 132, 141, 141, 17, 27, 97, 156, 159, 160, 188, 239, 78, 124, 17, 211, 124, 113, 26, 2, 32, 53, 21, 4, 195, 198, 42, 71, 17, 110, 157, 113, 185, 178, 74, 147, 87, 129, 179, 168, 163, 171, 126, 39, 156, 198, 29, 163, 199, 82, 25, 13, 112];
+        let sig: &[u8] = &[
+            48, 69, 2, 33, 0, 171, 111, 172, 181, 242, 159, 198, 106, 33, 229, 104, 147, 245, 97,
+            132, 141, 141, 17, 27, 97, 156, 159, 160, 188, 239, 78, 124, 17, 211, 124, 113, 26, 2,
+            32, 53, 21, 4, 195, 198, 42, 71, 17, 110, 157, 113, 185, 178, 74, 147, 87, 129, 179,
+            168, 163, 171, 126, 39, 156, 198, 29, 163, 199, 82, 25, 13, 112,
+        ];
 
         let curve = EccCtx::new();
         let ctx = SigCtx::new();
